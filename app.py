@@ -164,17 +164,18 @@ def search_dropbox_readonly(dbx, po_number: str):
         except dbx_module.exceptions.ApiError:
             continue
 
-    # If still not found, try listing shared folders directly
+    # If still not found, try listing shared folders and use namespace ID
     if not SEARCH_ROOT:
         try:
             shared = dbx.sharing_list_folders()
             shared_names = []
-            for f in shared.entries:
-                shared_names.append(f.name)
-                if "order graphics" in f.name.lower():
-                    # Mount and use this shared folder
-                    SEARCH_ROOT = f"/Design/{f.name}"
-                    st.info(f"✓ Found via shared folders: `{f.name}` — searching there")
+            for sf in shared.entries:
+                shared_names.append(sf.name)
+                if "order graphics" in sf.name.lower():
+                    # Use the shared folder namespace ID for direct access
+                    ns_id = sf.shared_folder_id
+                    SEARCH_ROOT = f"ns:{ns_id}"
+                    st.info(f"✓ Found shared folder: `{sf.name}` (namespace: {ns_id})")
                     break
             if not SEARCH_ROOT:
                 st.warning(
@@ -185,50 +186,38 @@ def search_dropbox_readonly(dbx, po_number: str):
         except Exception as e2:
             st.warning(f"Could not list shared folders: {e2}. Searching full Dropbox.")
 
-    # ── Try two search strategies ─────────────────────────────────────────────
-    # 1. Full P/O number (e.g. DSAU-CS0193)
-    # 2. Just the suffix (e.g. CS0193) in case Dropbox index strips the prefix
-    search_queries = [query]
-    if "-" in query:
-        search_queries.append(query.split("-", 1)[1])
+    # ── Walk the Order Graphics folder recursively to find the file ──────────
+    # Use files_list_folder with recursive=True for efficiency — one API call
+    # walks the entire tree instead of making a call per subfolder.
+    root_to_walk = SEARCH_ROOT if SEARCH_ROOT else ""
 
-    all_matches = []
-
-    for search_term in search_queries:
+    found_meta = None
+    with st.spinner(f"Scanning Order Graphics folder for `{query}`…"):
         try:
-            results = dbx.files_search_v2(
-                search_term,
-                options=dbx_module.files.SearchOptions(
-                    filename_only=True,
-                    max_results=20,
-                    path=SEARCH_ROOT,
-                ),
-            )
-            for match in results.matches:
-                meta = match.metadata.get_metadata()
-                if isinstance(meta, dbx_module.files.FileMetadata):
-                    all_matches.append(meta)
+            result = dbx.files_list_folder(root_to_walk, recursive=True)
+            while True:
+                for entry in result.entries:
+                    if isinstance(entry, dbx_module.files.FileMetadata):
+                        if (entry.name.upper().startswith(query)
+                                and entry.name.upper().endswith(".PDF")):
+                            found_meta = entry
+                            break
+                if found_meta or not result.has_more:
+                    break
+                result = dbx.files_list_folder_continue(result.cursor)
         except Exception as e:
-            st.warning(f"Search attempt failed for `{search_term}`: {e}")
+            st.error(f"Error scanning folder `{root_to_walk}`: {e}")
 
-    # ── Debug: show everything Dropbox returned ───────────────────────────────
-    if all_matches:
-        names = [m.name for m in all_matches]
-        st.info(f"Dropbox search returned {len(names)} result(s): {', '.join(names)}")
+    if found_meta:
+        st.info(f"✓ Found: `{found_meta.path_display}`")
+        _, response = dbx.files_download(found_meta.path_lower)
+        return found_meta.path_display, found_meta.name, response.content
     else:
         st.warning(
-            f"Dropbox returned 0 results for `{query}`. "
-            f"Searched in: `{SEARCH_ROOT or 'Full Dropbox root'}`"
+            f"No file starting with `{query}` found in Order Graphics. "
+            f"Check the P/O Number matches the start of the filename exactly."
         )
-
-    # ── Return first match whose name starts with full P/O number ─────────────
-    for meta in all_matches:
-        name = meta.name
-        if name.upper().startswith(query) and name.upper().endswith(".PDF"):
-            _, response = dbx.files_download(meta.path_lower)
-            return meta.path_display, meta.name, response.content
-
-    return None, None, None
+        return None, None, None
 
 
 def check_file_exists_in_dropbox(dbx, full_path: str) -> bool:
