@@ -232,7 +232,11 @@ def search_dropbox_readonly(dbx, po_number: str, customer_letter: str):
     if found_meta:
         st.info(f"✓ Found: `{found_meta.path_display}`")
         _, response = dbx_ns.files_download(found_meta.path_lower)
-        return found_meta.path_display, found_meta.name, response.content
+        # Store the namespace-scoped client so upload goes to the same place
+        st.session_state.dbx_ns = dbx_ns
+        # path_lower is namespace-relative, path_display is for display only
+        folder_path = found_meta.path_lower.rsplit("/", 1)[0]
+        return folder_path, found_meta.name, response.content
     else:
         st.warning(
             f"No file starting with `{query}` found under `Order Graphics/{letter}/`. "
@@ -467,7 +471,8 @@ def process_pdf(pdf_bytes: bytes, vals: dict) -> bytes:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 for key in ["source_pdf_bytes", "source_filename", "source_folder",
-            "source_po", "page_count", "result_pdf", "result_filename"]:
+            "source_po", "page_count", "result_pdf", "result_filename",
+            "dbx_ns", "og_namespace_id"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -743,11 +748,12 @@ if st.session_state.source_pdf_bytes:
                         fname += ".pdf"
 
                     # ── Step B: upload with all safety guards ─────────────────
-                    dbx = get_dropbox_client()
-                    if dbx:
+                    # Use namespace-scoped client so file lands in the shared folder
+                    dbx_upload = st.session_state.get("dbx_ns") or get_dropbox_client()
+                    if dbx_upload:
                         with st.spinner(f"Uploading **{fname}** to Dropbox…"):
                             save_path = upload_new_file_to_dropbox(
-                                dbx,
+                                dbx_upload,
                                 st.session_state.source_folder,
                                 fname,
                                 result_bytes,
