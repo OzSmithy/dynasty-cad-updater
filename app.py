@@ -128,105 +128,117 @@ def get_dropbox_client():
         return None
 
 
-def search_dropbox_readonly(dbx, po_number: str):
+def get_order_graphics_ns(dbx):
+    """
+    Get a namespace-scoped Dropbox client for the Order Graphics shared folder.
+    Caches namespace ID in session state to avoid repeated API calls.
+    Returns (dbx_ns, is_namespace) tuple.
+    """
+    import dropbox as dbx_lib
+
+    # Use cached namespace if available
+    if st.session_state.get("og_namespace_id"):
+        ns_id = st.session_state.og_namespace_id
+        dbx_ns = dbx.with_path_root(dbx_lib.common.PathRoot.namespace_id(ns_id))
+        return dbx_ns, True
+
+    # Try direct path first
+    for candidate in ["/Design/Order Graphics", "/Order Graphics"]:
+        try:
+            dbx.files_get_metadata(candidate)
+            st.session_state.og_namespace_id = None
+            st.session_state.og_path = candidate
+            return dbx, False
+        except Exception:
+            continue
+
+    # Fall back to shared folder listing to get namespace ID
+    try:
+        shared = dbx.sharing_list_folders()
+        for sf in shared.entries:
+            if "order graphics" in sf.name.lower():
+                ns_id = sf.shared_folder_id
+                st.session_state.og_namespace_id = ns_id
+                dbx_ns = dbx.with_path_root(dbx_lib.common.PathRoot.namespace_id(ns_id))
+                return dbx_ns, True
+    except Exception as e:
+        st.error(f"Could not locate Order Graphics folder: {e}")
+
+    return None, False
+
+
+def search_dropbox_readonly(dbx, po_number: str, customer_letter: str):
     """
     SAFE READ-ONLY operation.
-    Search Dropbox for a PDF whose name starts with po_number.
-    Searches /Design/Order Graphics and all subfolders.
-    Downloads only the first exact match.
-    Does NOT list, modify, or touch any other file.
+    Scans only the single letter subfolder within Order Graphics.
+    Structure: Order Graphics / [LETTER] / [CUSTOMER] / file.PDF
+    Only 2 levels deep — fast even with thousands of files.
     Returns (display_path, filename, bytes) or (None, None, None).
     """
     import dropbox as dbx_module
 
-    query = po_number.strip().upper()
-    if not query:
+    query  = po_number.strip().upper()
+    letter = customer_letter.strip().upper()[:1]  # single letter only
+
+    if not query or not letter:
         return None, None, None
 
-    # ── Find the correct path for the shared Design/Order Graphics folder ───────
-    # Design is a shared folder — it may not appear at root level via API.
-    # We try several known path variations, then fall back to full Dropbox search.
-    CANDIDATE_PATHS = [
-        "/Design/Order Graphics",
-        "/design/order graphics",
-        "/Order Graphics",
-        "/order graphics",
-    ]
-
-    SEARCH_ROOT = ""  # default: full Dropbox
-
-    for candidate in CANDIDATE_PATHS:
-        try:
-            folder_meta = dbx.files_get_metadata(candidate)
-            SEARCH_ROOT = folder_meta.path_lower
-            st.info(f"✓ Folder found: `{folder_meta.path_display}`")
-            break
-        except dbx_module.exceptions.ApiError:
-            continue
-
-    # If still not found, try listing shared folders and use namespace ID
-    if not SEARCH_ROOT:
-        try:
-            shared = dbx.sharing_list_folders()
-            shared_names = []
-            for sf in shared.entries:
-                shared_names.append(sf.name)
-                if "order graphics" in sf.name.lower():
-                    # Use the shared folder namespace ID for direct access
-                    ns_id = sf.shared_folder_id
-                    SEARCH_ROOT = ns_id  # store raw ID, used below
-                    st.info(f"✓ Found shared folder: `{sf.name}` (namespace: {ns_id})")
-                    break
-            if not SEARCH_ROOT:
-                st.warning(
-                    f"Could not locate Order Graphics folder. "
-                    f"Shared folders visible: {', '.join(shared_names) or 'none'}. "
-                    f"Searching full Dropbox instead."
-                )
-        except Exception as e2:
-            st.warning(f"Could not list shared folders: {e2}. Searching full Dropbox.")
-
-    # ── Walk the Order Graphics folder recursively to find the file ──────────
-    # Use files_list_folder with recursive=True for efficiency — one API call
-    # walks the entire tree instead of making a call per subfolder.
-    root_to_walk = SEARCH_ROOT if SEARCH_ROOT else ""
+    # Get namespace-scoped client
+    dbx_ns, is_ns = get_order_graphics_ns(dbx)
+    if not dbx_ns:
+        st.error("Could not connect to Order Graphics folder.")
+        return None, None, None
 
     found_meta = None
-    with st.spinner(f"Scanning Order Graphics folder for `{query}`…"):
-        try:
-            # If we have a namespace ID, use a path-root header to access the shared folder
-            import dropbox
-            if root_to_walk and not root_to_walk.startswith("/"):
-                # It's a namespace ID — use with_path_root to set the namespace
-                dbx_ns = dbx.with_path_root(dropbox.common.PathRoot.namespace_id(root_to_walk))
-                result = dbx_ns.files_list_folder("", recursive=True)
-            else:
-                dbx_ns = dbx
-                result = dbx_ns.files_list_folder(root_to_walk, recursive=True)
-            while True:
-                for entry in result.entries:
-                    if isinstance(entry, dbx_module.files.FileMetadata):
-                        if (entry.name.upper().startswith(query)
-                                and entry.name.upper().endswith(".PDF")):
-                            found_meta = entry
-                            break
-                if found_meta or not result.has_more:
-                    break
-                result = dbx_ns.files_list_folder_continue(result.cursor)
-        except Exception as e:
-            st.error(f"Error scanning folder `{root_to_walk}`: {e}")
 
-    if found_meta:
-        st.info(f"✓ Found: `{found_meta.path_display}`")
-        _, response = dbx.files_download(found_meta.path_lower)
-        return found_meta.path_display, found_meta.name, response.content
-    else:
-        st.warning(
-            f"No file starting with `{query}` found in Order Graphics. "
-            f"Check the P/O Number matches the start of the filename exactly."
+    try:
+        # List customer folders under the letter folder
+        letter_result = dbx_ns.files_list_folder(f"/{letter}")
+        customer_folders = [
+            e for e in letter_result.entries
+            if isinstance(e, dbx_module.files.FolderMetadata)
+        ]
+
+        status = st.empty()
+        status.info(f"Found {len(customer_folders)} customer folder(s) under `{letter}/` — scanning…")
+
+        for folder in customer_folders:
+            try:
+                sub = dbx_ns.files_list_folder(folder.path_lower)
+                while True:
+                    for entry in sub.entries:
+                        if isinstance(entry, dbx_module.files.FileMetadata):
+                            if (entry.name.upper().startswith(query)
+                                    and entry.name.upper().endswith(".PDF")):
+                                found_meta = entry
+                                break
+                    if found_meta or not sub.has_more:
+                        break
+                    sub = dbx_ns.files_list_folder_continue(sub.cursor)
+            except Exception:
+                continue
+            if found_meta:
+                break
+
+        status.empty()
+
+    except dbx_module.exceptions.ApiError as e:
+        st.error(
+            f"Could not open letter folder `/{letter}` in Order Graphics. "
+            f"Make sure the customer letter is correct. Error: {e}"
         )
         return None, None, None
 
+    if found_meta:
+        st.info(f"✓ Found: `{found_meta.path_display}`")
+        _, response = dbx_ns.files_download(found_meta.path_lower)
+        return found_meta.path_display, found_meta.name, response.content
+    else:
+        st.warning(
+            f"No file starting with `{query}` found under `Order Graphics/{letter}/`. "
+            f"Check the P/O Number and customer letter are correct."
+        )
+        return None, None, None
 
 def check_file_exists_in_dropbox(dbx, full_path: str) -> bool:
     """
@@ -472,36 +484,47 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-s_col1, s_col2 = st.columns([3, 1])
+s_col1, s_col2, s_col3 = st.columns([3, 1, 1])
 with s_col1:
     search_po = st.text_input(
         "Source P/O Number",
-        placeholder="e.g. DSNZ-PL5474",
+        placeholder="e.g. DSAU-CS0193",
         label_visibility="collapsed",
     )
 with s_col2:
-    do_search = st.button("🔍  Search", use_container_width=True,
-                          disabled=not search_po.strip())
+    customer_letter = st.text_input(
+        "Customer Letter",
+        placeholder="e.g. F",
+        max_chars=1,
+        label_visibility="collapsed",
+        help="First letter of the customer name (e.g. F for Five Star Removals)",
+    )
+with s_col3:
+    do_search = st.button(
+        "🔍  Search", use_container_width=True,
+        disabled=not (search_po.strip() and customer_letter.strip()),
+    )
 
-if do_search and search_po.strip():
-    with st.spinner(f"Searching Dropbox for **{search_po.strip().upper()}**…"):
-        dbx = get_dropbox_client()
-        if dbx:
-            path, filename, pdf_bytes = search_dropbox_readonly(dbx, search_po.strip())
-            if pdf_bytes:
-                st.session_state.source_pdf_bytes = pdf_bytes
-                st.session_state.source_filename  = filename
-                st.session_state.source_folder    = os.path.dirname(path)
-                st.session_state.source_po        = extract_po_number(pdf_bytes)
-                st.session_state.page_count       = len(PdfReader(io.BytesIO(pdf_bytes)).pages)
-                st.session_state.result_pdf       = None
-                st.session_state.result_filename  = None
-                st.rerun()
-            else:
-                st.error(
-                    f"No PDF found starting with **{search_po.strip().upper()}**. "
-                    "Check the P/O Number and try again."
-                )
+st.markdown(
+    '<span style="font-size:11px;color:#888;">Enter the P/O Number and first letter of the customer name (e.g. F for Five Star Removals)</span>',
+    unsafe_allow_html=True,
+)
+
+if do_search and search_po.strip() and customer_letter.strip():
+    dbx = get_dropbox_client()
+    if dbx:
+        path, filename, pdf_bytes = search_dropbox_readonly(
+            dbx, search_po.strip(), customer_letter.strip()
+        )
+        if pdf_bytes:
+            st.session_state.source_pdf_bytes = pdf_bytes
+            st.session_state.source_filename  = filename
+            st.session_state.source_folder    = os.path.dirname(path)
+            st.session_state.source_po        = extract_po_number(pdf_bytes)
+            st.session_state.page_count       = len(PdfReader(io.BytesIO(pdf_bytes)).pages)
+            st.session_state.result_pdf       = None
+            st.session_state.result_filename  = None
+            st.rerun()
 
 if st.session_state.source_pdf_bytes:
     pages = st.session_state.page_count
