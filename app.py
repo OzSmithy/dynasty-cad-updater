@@ -149,13 +149,21 @@ def search_dropbox_readonly(dbx, po_number: str):
     try:
         folder_meta = dbx.files_get_metadata(SEARCH_ROOT)
         st.info(f"✓ Folder accessible: `{folder_meta.path_display}`")
-    except dbx_module.exceptions.ApiError as e:
-        st.error(
-            f"❌ Cannot access `{SEARCH_ROOT}` — "
-            f"check the app has Full Dropbox access and the folder path is correct. "
-            f"Error: {e}"
-        )
-        # Fall back to searching from root
+    except dbx_module.exceptions.ApiError:
+        # Folder not found — list root to find correct path
+        st.error(f"❌ Cannot access `{SEARCH_ROOT}` — listing root folders to find correct path:")
+        try:
+            root_result = dbx.files_list_folder("")
+            root_folders = [e.name for e in root_result.entries if hasattr(e, 'path_display')]
+            st.info(f"Root folders: {', '.join(root_folders)}")
+            # Also try to list one level deeper if Design exists
+            for entry in root_result.entries:
+                if entry.name.lower() == "design":
+                    design_result = dbx.files_list_folder(entry.path_lower)
+                    design_folders = [e.name for e in design_result.entries]
+                    st.info(f"Contents of /{entry.name}: {', '.join(design_folders)}")
+        except Exception as e2:
+            st.error(f"Could not list root: {e2}")
         SEARCH_ROOT = ""
         st.warning("Falling back to searching from Dropbox root...")
 
