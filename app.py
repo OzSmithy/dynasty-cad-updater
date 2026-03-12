@@ -281,50 +281,48 @@ if uploaded:
 st.markdown('<div class="step-label">02 — Update Fields</div>', unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 2])
-
 with col1:
     st.markdown("**P/O Number**")
 with col2:
     po_number = st.text_input("P/O Number", placeholder="e.g. DSNZ-PL5475",
                                label_visibility="collapsed")
 
+col1, col2 = st.columns([1, 2])
 with col1:
     st.markdown("**Artist**")
 with col2:
     artist = st.text_input("Artist", placeholder="e.g. SANA",
                             label_visibility="collapsed")
 
+col1, col2 = st.columns([1, 2])
 with col1:
     st.markdown("**Date**")
 with col2:
-    today = date.today().strftime("%d/%m/%Y")
-    date_val = st.text_input("Date", value=today, label_visibility="collapsed")
+    picked_date = st.date_input("Date", value=date.today(),
+                                 format="DD/MM/YYYY", label_visibility="collapsed")
+    date_val = picked_date.strftime("%d/%m/%Y")
 
 st.divider()
 
+col1, col2 = st.columns([1, 2])
 with col1:
     st.markdown("**Previous Ref**")
+    st.markdown('<div class="auto-note">⚡ Auto-filled from source P/O</div>', unsafe_allow_html=True)
 with col2:
     previous_ref = st.text_input(
         "Previous Ref",
         value=source_po or "",
         label_visibility="collapsed",
-        help="Auto-filled from the uploaded PDF's P/O Number",
+        help="Auto-filled from the uploaded PDF's P/O Number — edit if needed",
     )
-st.markdown(
-    '<div class="auto-note">⚡ Auto-filled from source P/O Number</div>',
-    unsafe_allow_html=True,
-)
 
+col1, col2 = st.columns([1, 2])
 with col1:
     st.markdown("**Comments**")
+    st.markdown('<div class="comment-hint">Appears in red on PDF</div>', unsafe_allow_html=True)
 with col2:
     comments = st.text_input("Comments", placeholder="e.g. *REPEAT OF DSNZ-PL5474",
                               label_visibility="collapsed")
-st.markdown(
-    '<div class="comment-hint">Comments will appear in red text on the PDF</div>',
-    unsafe_allow_html=True,
-)
 
 # Step 3 — Generate
 st.markdown('<div class="step-label">03 — Generate</div>', unsafe_allow_html=True)
