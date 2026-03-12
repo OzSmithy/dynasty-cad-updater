@@ -244,6 +244,38 @@ def get_dropbox_client():
         return None
 
 
+DROG_ARCHIVE_PATH = "/drog"   # path inside the DESIGN shared folder
+
+def get_design_ns(dbx):
+    """
+    Get a namespace-scoped Dropbox client for the DESIGN shared folder.
+    The DROG archive folder lives at /DROG inside this namespace.
+    Caches namespace ID in session state to avoid repeated API calls.
+    Returns dbx_ns or None on failure.
+    """
+    import dropbox as dbx_lib
+    cache_key = "design_namespace_id"
+    if st.session_state.get(cache_key):
+        ns_id  = st.session_state[cache_key]
+        dbx_ns = dbx.with_path_root(dbx_lib.common.PathRoot.namespace_id(ns_id))
+        try:
+            dbx_ns.files_list_folder(DROG_ARCHIVE_PATH)
+            return dbx_ns
+        except Exception:
+            st.session_state[cache_key] = None
+
+    try:
+        shared = dbx.sharing_list_folders()
+        for entry in shared.entries:
+            if entry.name.lower() == "design":
+                ns_id = entry.shared_folder_id
+                st.session_state[cache_key] = ns_id
+                return dbx.with_path_root(dbx_lib.common.PathRoot.namespace_id(ns_id))
+    except Exception as e:
+        st.warning(f"Could not locate DESIGN shared folder: {e}")
+    return None
+
+
 def get_order_graphics_ns(dbx):
     """
     Get a namespace-scoped Dropbox client for the Order Graphics shared folder.
@@ -666,7 +698,7 @@ def process_pdf(pdf_bytes: bytes, vals: dict, graphic_type: str = "custom") -> b
 
 for key in ["source_pdf_bytes", "source_filename", "source_folder",
             "source_po", "page_count", "result_pdf", "result_filename",
-            "dbx_ns", "og_namespace_id", "graphic_type"]:
+            "dbx_ns", "og_namespace_id", "design_namespace_id", "graphic_type"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -980,7 +1012,8 @@ if st.session_state.source_pdf_bytes:
                     # Use namespace-scoped client so file lands in the shared folder
                     dbx_upload = st.session_state.get("dbx_ns") or get_dropbox_client()
                     if dbx_upload:
-                        with st.spinner(f"Uploading **{fname}** to Dropbox…"):
+                        # Primary: save to the same folder as the source file
+                        with st.spinner(f"Uploading **{fname}** to customer folder…"):
                             save_path = upload_new_file_to_dropbox(
                                 dbx_upload,
                                 st.session_state.source_folder,
@@ -989,14 +1022,41 @@ if st.session_state.source_pdf_bytes:
                                 st.session_state.source_filename,
                             )
 
+                        # Secondary: save archive copy to DESIGN/DROG/
+                        drog_path  = None
+                        drog_error = None
+                        try:
+                            dbx_design = get_design_ns(get_dropbox_client())
+                            if dbx_design:
+                                with st.spinner("Saving archive copy to Design/DROG/…"):
+                                    drog_path = upload_new_file_to_dropbox(
+                                        dbx_design,
+                                        DROG_ARCHIVE_PATH,
+                                        fname,
+                                        result_bytes,
+                                        st.session_state.source_filename,
+                                    )
+                            else:
+                                drog_error = "DESIGN shared folder not found in Dropbox"
+                        except ValueError as dve:
+                            drog_error = str(dve)
+                        except Exception as de:
+                            drog_error = str(de)
+
                         st.session_state.result_pdf      = result_bytes
                         st.session_state.result_filename = fname
 
                         pages = len(PdfReader(io.BytesIO(result_bytes)).pages)
+                        drog_line = (
+                            f"📁 Archive `Design/DROG/`: `{drog_path}`"
+                            if drog_path
+                            else f"⚠️ Archive copy skipped — {drog_error}"
+                        )
                         st.success(
                             f"✓ **{fname}** saved to Dropbox successfully  \n"
-                            f"📁 `{save_path}`  ·  "
+                            f"📁 Customer folder: `{save_path}`  ·  "
                             f"{pages} page{'s' if pages > 1 else ''}  \n"
+                            f"{drog_line}  \n"
                             f"🔒 Source file **{st.session_state.source_filename}** "
                             f"was not modified."
                         )
