@@ -1010,10 +1010,19 @@ if st.session_state.source_pdf_bytes:
     # ── Local download backup (always available after generation) ─────────────
     if st.session_state.result_pdf:
         st.divider()
-        st.download_button(
-            label="⬇  Also download locally as backup",
-            data=st.session_state.result_pdf,
-            file_name=st.session_state.result_filename or "output.pdf",
-            mime="application/pdf",
-            use_container_width=False,
-        )
+        col_dl, col_new = st.columns([2, 1])
+        with col_dl:
+            st.download_button(
+                label="⬇  Also download locally as backup",
+                data=st.session_state.result_pdf,
+                file_name=st.session_state.result_filename or "output.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        with col_new:
+            if st.button("↩  Start Another", use_container_width=True):
+                for key in ["source_pdf_bytes", "source_filename", "source_folder",
+                            "source_po", "page_count", "result_pdf", "result_filename",
+                            "dbx_ns", "graphic_type"]:
+                    st.session_state[key] = None
+                st.rerun()
