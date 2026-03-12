@@ -599,6 +599,20 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
     c.setStrokeColorRGB(0, 0, 0)
     c.setLineWidth(BORDER_LW)
     c.line(DIVIDER_X, divider_y0, DIVIDER_X, divider_y1)
+
+    # Stock-only: free-floating comment below DATE row, centred, red, Helvetica
+    stock_comment = vals.get("stock_comment", "").strip()
+    if stock_comment:
+        centre_x  = (DIVIDER_X + RIGHT_X) / 2          # 141.52
+        text_y    = divider_y0 - 14                     # just below DATE cell bottom
+        max_w     = RIGHT_X - DIVIDER_X - 4
+        c.setFont("Helvetica", FONT_SIZE)
+        c.setFillColorRGB(0.85, 0, 0)
+        lines = wrap_text(stock_comment, "Helvetica", FONT_SIZE, max_w, c)
+        for i, line in enumerate(lines):
+            line_y = text_y - i * LINE_HEIGHT
+            c.drawCentredString(centre_x, line_y, line)
+
     c.save(); pkt.seek(0)
     return pkt
 
@@ -828,6 +842,23 @@ if st.session_state.source_pdf_bytes:
                 value=default_comment,
                 label_visibility="collapsed",
             )
+    # Stock gets a free-text comment (written below DATE, no cell box, centred, red)
+    if is_stock:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.markdown("**Comments**")
+            st.markdown(
+                '<div class="comment-hint">Appears in red below DATE on PDF</div>',
+                unsafe_allow_html=True,
+            )
+        with col2:
+            default_comment = f"*REPEAT OF {st.session_state.source_po}" if st.session_state.source_po else ""
+            comments = st.text_input(
+                "Stock Comments",
+                value=default_comment,
+                label_visibility="collapsed",
+            )
+        previous_ref = ""
     else:
         previous_ref = ""
         comments     = ""
@@ -928,11 +959,12 @@ if st.session_state.source_pdf_bytes:
                         "po_number":    po_number.strip().upper(),
                         "artist":       artist.strip().upper(),
                         "date":         date_val,
-                        # Only include fields relevant to the graphic type
+                        # Custom: include previous_ref + comments in cells
+                        # Stock: comments passed separately for free-float rendering
                         **({"previous_ref": previous_ref.strip().upper(),
                             "comments":     comments.strip().upper()}
                            if (st.session_state.graphic_type or "custom") == "custom"
-                           else {}),
+                           else {"stock_comment": comments.strip().upper()}),
                     }
                     result_bytes = process_pdf(
                         st.session_state.source_pdf_bytes,
