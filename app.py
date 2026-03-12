@@ -458,16 +458,19 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
         c.rect(DIVIDER_X + lw2, y0 + lw2,
                RIGHT_X - DIVIDER_X - BORDER_LW, ch - BORDER_LW, fill=1, stroke=0)
 
-        c.setFont("Grover-Regular", FONT_SIZE)
         if field == "comments":
+            # Use Helvetica for comments — user-typed text may contain characters
+            # not in the Grover font subset (e.g. X is never in Dynasty Sport PDFs)
+            c.setFont("Helvetica", FONT_SIZE)
             c.setFillColorRGB(0.85, 0, 0)
-            lines   = wrap_text(text, "Grover-Regular", FONT_SIZE, maxw, c)
+            lines   = wrap_text(text, "Helvetica", FONT_SIZE, maxw, c)
             start_y = y1 - 4 - FONT_SIZE
             for i, line in enumerate(lines):
                 ly = start_y - i * LINE_HEIGHT
                 if ly >= y0 + 2:
                     c.drawString(TEXT_X, ly, line)
         else:
+            c.setFont("Grover-Regular", FONT_SIZE)
             c.setFillColorRGB(0, 0, 0)
             c.drawString(TEXT_X, y0 + (ch - FONT_SIZE) / 2 + 2, text)
 
