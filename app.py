@@ -143,29 +143,47 @@ def search_dropbox_readonly(dbx, po_number: str):
     if not query:
         return None, None, None
 
-    SEARCH_ROOT = "/Design/Order Graphics"
+    # ── Find the correct path for the shared Design/Order Graphics folder ───────
+    # Design is a shared folder — it may not appear at root level via API.
+    # We try several known path variations, then fall back to full Dropbox search.
+    CANDIDATE_PATHS = [
+        "/Design/Order Graphics",
+        "/design/order graphics",
+        "/Order Graphics",
+        "/order graphics",
+    ]
 
-    # ── Diagnostic: verify the folder is accessible ───────────────────────────
-    try:
-        folder_meta = dbx.files_get_metadata(SEARCH_ROOT)
-        st.info(f"✓ Folder accessible: `{folder_meta.path_display}`")
-    except dbx_module.exceptions.ApiError:
-        # Folder not found — list root to find correct path
-        st.error(f"❌ Cannot access `{SEARCH_ROOT}` — listing root folders to find correct path:")
+    SEARCH_ROOT = ""  # default: full Dropbox
+
+    for candidate in CANDIDATE_PATHS:
         try:
-            root_result = dbx.files_list_folder("")
-            root_folders = [e.name for e in root_result.entries if hasattr(e, 'path_display')]
-            st.info(f"Root folders: {', '.join(root_folders)}")
-            # Also try to list one level deeper if Design exists
-            for entry in root_result.entries:
-                if entry.name.lower() == "design":
-                    design_result = dbx.files_list_folder(entry.path_lower)
-                    design_folders = [e.name for e in design_result.entries]
-                    st.info(f"Contents of /{entry.name}: {', '.join(design_folders)}")
+            folder_meta = dbx.files_get_metadata(candidate)
+            SEARCH_ROOT = folder_meta.path_lower
+            st.info(f"✓ Folder found: `{folder_meta.path_display}`")
+            break
+        except dbx_module.exceptions.ApiError:
+            continue
+
+    # If still not found, try listing shared folders directly
+    if not SEARCH_ROOT:
+        try:
+            shared = dbx.sharing_list_folders()
+            shared_names = []
+            for f in shared.entries:
+                shared_names.append(f.name)
+                if "order graphics" in f.name.lower():
+                    # Mount and use this shared folder
+                    SEARCH_ROOT = f"/Design/{f.name}"
+                    st.info(f"✓ Found via shared folders: `{f.name}` — searching there")
+                    break
+            if not SEARCH_ROOT:
+                st.warning(
+                    f"Could not locate Order Graphics folder. "
+                    f"Shared folders visible: {', '.join(shared_names) or 'none'}. "
+                    f"Searching full Dropbox instead."
+                )
         except Exception as e2:
-            st.error(f"Could not list root: {e2}")
-        SEARCH_ROOT = ""
-        st.warning("Falling back to searching from Dropbox root...")
+            st.warning(f"Could not list shared folders: {e2}. Searching full Dropbox.")
 
     # ── Try two search strategies ─────────────────────────────────────────────
     # 1. Full P/O number (e.g. DSAU-CS0193)
