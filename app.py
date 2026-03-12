@@ -628,9 +628,10 @@ if st.session_state.source_pdf_bytes:
             unsafe_allow_html=True,
         )
     with col2:
+        default_comment = f"*REPEAT OF {st.session_state.source_po}" if st.session_state.source_po else ""
         comments = st.text_input(
             "Comments",
-            placeholder="e.g. *REPEAT OF DSNZ-PL5474",
+            value=default_comment,
             label_visibility="collapsed",
         )
 
