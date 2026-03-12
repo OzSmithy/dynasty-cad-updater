@@ -373,8 +373,15 @@ def detect_graphic_type(pdf_bytes: bytes) -> str:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             page = pdf.pages[0]
             rects = page.rects
-            # Check if there are rects below top=190 (custom has rows down to ~321)
-            deep_rects = [r for r in rects if r['top'] > 195 and r['x0'] < 220 and r['x1'] > 100]
+            # Custom has table rows between top=190 and top=330 (ARTIST/DATE/PREV REF/COMMENTS)
+            # Stock table ends at top~190 (DATE is last row)
+            # Ignore footer rects (top > 400)
+            deep_rects = [
+                r for r in rects
+                if 195 < r['top'] < 400
+                and r['x0'] < 220
+                and r['x1'] > 100
+            ]
             return "custom" if deep_rects else "stock"
     except Exception:
         return "custom"  # safe default
