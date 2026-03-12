@@ -147,13 +147,25 @@ def search_dropbox_readonly(dbx, po_number: str):
         options=dbx_module.files.SearchOptions(filename_only=True, max_results=20),
     )
 
+    # Debug: show what Dropbox returned
+    matches_found = []
+    for match in results.matches:
+        meta = match.metadata.get_metadata()
+        if isinstance(meta, dbx_module.files.FileMetadata):
+            matches_found.append(meta.name)
+
+    if matches_found:
+        st.info(f"Dropbox returned {len(matches_found)} match(es): {', '.join(matches_found)}")
+    else:
+        st.info("Dropbox returned 0 matches for this search term.")
+
     for match in results.matches:
         meta = match.metadata.get_metadata()
         if not isinstance(meta, dbx_module.files.FileMetadata):
             continue
         name = meta.name
-        # Must start exactly with the P/O number and be a PDF — no partial matches
-        if name.upper().startswith(query) and name.lower().endswith(".pdf"):
+        # Must start exactly with the P/O number and be a PDF (any case extension)
+        if name.upper().startswith(query) and name.upper().endswith(".PDF"):
             _, response = dbx.files_download(meta.path_lower)
             return meta.path_display, meta.name, response.content
 
@@ -226,13 +238,15 @@ def upload_new_file_to_dropbox(dbx, folder_path: str, filename: str,
 def propose_new_filename(source_filename: str, new_po: str) -> str:
     """
     Replace the P/O prefix only.
-    DSNZ-PL5474_TAWA_RFC_SHORTS_2025.pdf → DSNZ-PL5475_TAWA_RFC_SHORTS_2025.pdf
-    Everything after the first underscore is preserved exactly.
+    DSAU-CS0193_Five Star Removals-Stock Polo.PDF → DSAU-CS0194_Five Star Removals-Stock Polo.PDF
+    Everything after the first underscore is preserved exactly, including
+    spaces, capitalisation and the original file extension.
     """
     new_po = new_po.strip().upper()
     parts  = source_filename.split("_", 1)
     if len(parts) == 2:
         return f"{new_po}_{parts[1]}"
+    # Fallback: no underscore found — keep original name but swap prefix
     return f"{new_po}_ORDER_GRAPHIC.pdf"
 
 
