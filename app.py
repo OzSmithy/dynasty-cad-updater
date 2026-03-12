@@ -232,10 +232,10 @@ def search_dropbox_readonly(dbx, po_number: str, customer_letter: str):
     if found_meta:
         st.info(f"✓ Found: `{found_meta.path_display}`")
         _, response = dbx_ns.files_download(found_meta.path_lower)
-        # Store the namespace-scoped client so upload goes to the same place
+        # Store the namespace-scoped client so upload goes to same folder
         st.session_state.dbx_ns = dbx_ns
-        # path_lower is namespace-relative, path_display is for display only
-        folder_path = found_meta.path_lower.rsplit("/", 1)[0]
+        # Use path_lower of the file's parent folder (e.g. /f/five star removals)
+        folder_path = found_meta.path_lower.rsplit("/", 1)[0]  # e.g. /f/five star removals
         return folder_path, found_meta.name, response.content
     else:
         st.warning(
@@ -334,13 +334,50 @@ TEXT_X      = 83.0
 FONT_SIZE   = 10.0
 LINE_HEIGHT = 13.0
 
-CELLS = {
+# Custom Order Graphic — 5 editable fields in lower table section
+CUSTOM_CELLS = {
     "po_number":    {"rl_y0": PAGE_HEIGHT - 79.497,  "rl_y1": PAGE_HEIGHT - 57.310},
     "artist":       {"rl_y0": PAGE_HEIGHT - 212.871, "rl_y1": PAGE_HEIGHT - 190.684},
     "date":         {"rl_y0": PAGE_HEIGHT - 235.058, "rl_y1": PAGE_HEIGHT - 212.871},
     "previous_ref": {"rl_y0": PAGE_HEIGHT - 257.245, "rl_y1": PAGE_HEIGHT - 235.058},
     "comments":     {"rl_y0": PAGE_HEIGHT - 321.223, "rl_y1": PAGE_HEIGHT - 257.245},
 }
+
+# Stock Order Graphic — 3 editable fields (P/O NUMBER, ARTIST, DATE only)
+# Exact coords from PDF rect analysis
+STOCK_CELLS = {
+    "po_number": {"rl_y0": 515.779, "rl_y1": 537.966},
+    "artist":    {"rl_y0": 426.780, "rl_y1": 448.967},
+    "date":      {"rl_y0": 404.593, "rl_y1": 426.780},
+}
+
+# Divider line extents per type
+CUSTOM_DIVIDER_Y0 = PAGE_HEIGHT - 321.223
+CUSTOM_DIVIDER_Y1 = PAGE_HEIGHT - 57.310
+STOCK_DIVIDER_Y0  = 404.593
+STOCK_DIVIDER_Y1  = 537.966
+
+# Keep CELLS as alias — will be set dynamically per PDF type
+CELLS = CUSTOM_CELLS
+
+
+def detect_graphic_type(pdf_bytes: bytes) -> str:
+    """
+    Detect whether a PDF is a Custom or Stock Order Graphic.
+    Stock Order Graphics have 6 rows ending at ~top=190 (DATE is last field).
+    Custom Order Graphics have additional rows below (ARTIST, DATE, PREV REF, COMMENTS).
+    Returns "stock" or "custom".
+    """
+    try:
+        import pdfplumber
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            page = pdf.pages[0]
+            rects = page.rects
+            # Check if there are rects below top=190 (custom has rows down to ~321)
+            deep_rects = [r for r in rects if r['top'] > 195 and r['x0'] < 220 and r['x1'] > 100]
+            return "custom" if deep_rects else "stock"
+    except Exception:
+        return "custom"  # safe default
 
 
 def extract_grover_font(pdf_bytes: bytes):
@@ -393,13 +430,20 @@ def wrap_text(text, font_name, font_size, max_width, c):
     return lines
 
 
-def make_overlay(font_path, vals, pw, ph):
+def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y1=None):
+    if cells is None:
+        cells = CUSTOM_CELLS
+    if divider_y0 is None:
+        divider_y0 = CUSTOM_DIVIDER_Y0
+    if divider_y1 is None:
+        divider_y1 = CUSTOM_DIVIDER_Y1
+
     pkt  = io.BytesIO()
     c    = canvas.Canvas(pkt, pagesize=(pw, ph))
     lw2  = BORDER_LW / 2
     maxw = RIGHT_X - TEXT_X - 4
 
-    for field, cell in CELLS.items():
+    for field, cell in cells.items():
         y0 = cell["rl_y0"]; y1 = cell["rl_y1"]; ch = y1 - y0
         text = vals.get(field, "")
 
@@ -428,12 +472,12 @@ def make_overlay(font_path, vals, pw, ph):
     # Redraw the vertical divider line between label and value columns
     c.setStrokeColorRGB(0, 0, 0)
     c.setLineWidth(BORDER_LW)
-    c.line(DIVIDER_X, PAGE_HEIGHT - 321.223, DIVIDER_X, PAGE_HEIGHT - 57.310)
+    c.line(DIVIDER_X, divider_y0, DIVIDER_X, divider_y1)
     c.save(); pkt.seek(0)
     return pkt
 
 
-def process_pdf(pdf_bytes: bytes, vals: dict) -> bytes:
+def process_pdf(pdf_bytes: bytes, vals: dict, graphic_type: str = "custom") -> bytes:
     """Generate the updated PDF entirely in memory. Source bytes are never modified."""
     font_data = extract_grover_font(pdf_bytes)
     if not font_data:
@@ -448,13 +492,23 @@ def process_pdf(pdf_bytes: bytes, vals: dict) -> bytes:
         except Exception:
             pass  # already registered from a previous call
 
+        # Select correct cell layout and divider extents
+        if graphic_type == "stock":
+            cells       = STOCK_CELLS
+            divider_y0  = STOCK_DIVIDER_Y0
+            divider_y1  = STOCK_DIVIDER_Y1
+        else:
+            cells       = CUSTOM_CELLS
+            divider_y0  = CUSTOM_DIVIDER_Y0
+            divider_y1  = CUSTOM_DIVIDER_Y1
+
         reader = PdfReader(io.BytesIO(pdf_bytes))
         writer = PdfWriter()
 
         for orig in reader.pages:
             w  = float(orig.mediabox.width)
             h  = float(orig.mediabox.height)
-            op = PdfReader(make_overlay(tmp.name, vals, w, h)).pages[0]
+            op = PdfReader(make_overlay(tmp.name, vals, w, h, cells, divider_y0, divider_y1)).pages[0]
             op.merge_page(orig, over=False)
             writer.add_page(op)
 
@@ -472,7 +526,7 @@ def process_pdf(pdf_bytes: bytes, vals: dict) -> bytes:
 
 for key in ["source_pdf_bytes", "source_filename", "source_folder",
             "source_po", "page_count", "result_pdf", "result_filename",
-            "dbx_ns", "og_namespace_id"]:
+            "dbx_ns", "og_namespace_id", "graphic_type"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -528,6 +582,7 @@ if do_search and search_po.strip() and customer_letter.strip():
             st.session_state.source_filename  = filename
             st.session_state.source_folder    = os.path.dirname(path)
             st.session_state.source_po        = extract_po_number(pdf_bytes)
+            st.session_state.graphic_type     = detect_graphic_type(pdf_bytes)
             st.session_state.page_count       = len(PdfReader(io.BytesIO(pdf_bytes)).pages)
             st.session_state.result_pdf       = None
             st.session_state.result_filename  = None
@@ -535,11 +590,14 @@ if do_search and search_po.strip() and customer_letter.strip():
 
 if st.session_state.source_pdf_bytes:
     pages = st.session_state.page_count
+    gtype = st.session_state.graphic_type or "custom"
+    gtype_label = "📋 Stock Order Graphic" if gtype == "stock" else "🎨 Custom Order Graphic"
     st.markdown(
         f'<div class="file-found">'
         f'✓ &nbsp;<strong>{st.session_state.source_filename}</strong>'
         f'&nbsp;·&nbsp; {pages} page{"s" if pages > 1 else ""}'
-        f'&nbsp;·&nbsp; P/O detected: <strong>{st.session_state.source_po or "unknown"}</strong>'
+        f'&nbsp;·&nbsp; P/O: <strong>{st.session_state.source_po or "unknown"}</strong>'
+        f'&nbsp;·&nbsp; {gtype_label}'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -612,35 +670,41 @@ if st.session_state.source_pdf_bytes:
 
     st.divider()
 
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.markdown("**Previous Ref**")
-        st.markdown(
-            '<div class="auto-note">⚡ Auto-filled from source P/O</div>',
-            unsafe_allow_html=True,
-        )
-    with col2:
-        previous_ref = st.text_input(
-            "Previous Ref",
-            value=st.session_state.source_po or "",
-            label_visibility="collapsed",
-            help="Auto-filled from the source PDF's P/O Number — edit if needed",
-        )
+    is_stock = (st.session_state.graphic_type == "stock")
 
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.markdown("**Comments**")
-        st.markdown(
-            '<div class="comment-hint">Appears in red on PDF</div>',
-            unsafe_allow_html=True,
-        )
-    with col2:
-        default_comment = f"*REPEAT OF {st.session_state.source_po}" if st.session_state.source_po else ""
-        comments = st.text_input(
-            "Comments",
-            value=default_comment,
-            label_visibility="collapsed",
-        )
+    if not is_stock:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.markdown("**Previous Ref**")
+            st.markdown(
+                '<div class="auto-note">⚡ Auto-filled from source P/O</div>',
+                unsafe_allow_html=True,
+            )
+        with col2:
+            previous_ref = st.text_input(
+                "Previous Ref",
+                value=st.session_state.source_po or "",
+                label_visibility="collapsed",
+                help="Auto-filled from the source PDF's P/O Number — edit if needed",
+            )
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.markdown("**Comments**")
+            st.markdown(
+                '<div class="comment-hint">Appears in red on PDF</div>',
+                unsafe_allow_html=True,
+            )
+        with col2:
+            default_comment = f"*REPEAT OF {st.session_state.source_po}" if st.session_state.source_po else ""
+            comments = st.text_input(
+                "Comments",
+                value=default_comment,
+                label_visibility="collapsed",
+            )
+    else:
+        previous_ref = ""
+        comments     = ""
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -741,7 +805,11 @@ if st.session_state.source_pdf_bytes:
                         "previous_ref": previous_ref.strip().upper(),
                         "comments":     comments.strip().upper(),
                     }
-                    result_bytes = process_pdf(st.session_state.source_pdf_bytes, vals)
+                    result_bytes = process_pdf(
+                        st.session_state.source_pdf_bytes,
+                        vals,
+                        graphic_type=st.session_state.graphic_type or "custom",
+                    )
 
                     fname = new_filename.strip()
                     if not fname.lower().endswith(".pdf"):
