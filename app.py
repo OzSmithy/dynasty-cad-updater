@@ -580,7 +580,7 @@ if do_search and search_po.strip() and customer_letter.strip():
         if pdf_bytes:
             st.session_state.source_pdf_bytes = pdf_bytes
             st.session_state.source_filename  = filename
-            st.session_state.source_folder    = os.path.dirname(path)
+            st.session_state.source_folder    = path  # already the folder path
             st.session_state.source_po        = extract_po_number(pdf_bytes)
             st.session_state.graphic_type     = detect_graphic_type(pdf_bytes)
             st.session_state.page_count       = len(PdfReader(io.BytesIO(pdf_bytes)).pages)
