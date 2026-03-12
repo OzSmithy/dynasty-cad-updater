@@ -174,7 +174,7 @@ def search_dropbox_readonly(dbx, po_number: str):
                 if "order graphics" in sf.name.lower():
                     # Use the shared folder namespace ID for direct access
                     ns_id = sf.shared_folder_id
-                    SEARCH_ROOT = f"ns:{ns_id}"
+                    SEARCH_ROOT = ns_id  # store raw ID, used below
                     st.info(f"✓ Found shared folder: `{sf.name}` (namespace: {ns_id})")
                     break
             if not SEARCH_ROOT:
@@ -194,7 +194,15 @@ def search_dropbox_readonly(dbx, po_number: str):
     found_meta = None
     with st.spinner(f"Scanning Order Graphics folder for `{query}`…"):
         try:
-            result = dbx.files_list_folder(root_to_walk, recursive=True)
+            # If we have a namespace ID, use a path-root header to access the shared folder
+            import dropbox
+            if root_to_walk and not root_to_walk.startswith("/"):
+                # It's a namespace ID — use with_path_root to set the namespace
+                dbx_ns = dbx.with_path_root(dropbox.common.PathRoot.namespace_id(root_to_walk))
+                result = dbx_ns.files_list_folder("", recursive=True)
+            else:
+                dbx_ns = dbx
+                result = dbx_ns.files_list_folder(root_to_walk, recursive=True)
             while True:
                 for entry in result.entries:
                     if isinstance(entry, dbx_module.files.FileMetadata):
@@ -204,7 +212,7 @@ def search_dropbox_readonly(dbx, po_number: str):
                             break
                 if found_meta or not result.has_more:
                     break
-                result = dbx.files_list_folder_continue(result.cursor)
+                result = dbx_ns.files_list_folder_continue(result.cursor)
         except Exception as e:
             st.error(f"Error scanning folder `{root_to_walk}`: {e}")
 
