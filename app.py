@@ -220,34 +220,13 @@ st.markdown("""
 
 def get_dropbox_client():
     """
-    Connect to Dropbox using App Key + App Secret + refresh token (never expires).
-    The refresh token (starts with 'ad') is passed as oauth2_refresh_token so
-    the SDK automatically exchanges it for short-lived access tokens as needed.
+    Connect to Dropbox using a long-lived access token generated from the
+    ogv2 app console (Access token expiration set to No expiration).
     """
     try:
         import dropbox
-        app_key    = st.secrets["DROPBOX_APP_KEY"]
-        app_secret = st.secrets["DROPBOX_APP_SECRET"]
-        token      = st.secrets["DROPBOX_TOKEN"]
-
-        # Detect whether the stored token is a refresh token (starts with 'ad')
-        # or a legacy short-lived access token (starts with 'sl.')
-        if token.startswith("sl."):
-            # Legacy short-lived token — use as-is (will expire)
-            dbx = dropbox.Dropbox(
-                oauth2_access_token=token,
-                app_key=app_key,
-                app_secret=app_secret,
-            )
-        else:
-            # Refresh token — SDK will auto-exchange for access tokens forever
-            dbx = dropbox.Dropbox(
-                oauth2_refresh_token=token,
-                app_key=app_key,
-                app_secret=app_secret,
-            )
-
-        # Quick check the connection works
+        token = st.secrets["DROPBOX_TOKEN"]
+        dbx = dropbox.Dropbox(oauth2_access_token=token)
         dbx.users_get_current_account()
         return dbx
     except Exception as e:
@@ -709,7 +688,7 @@ def process_pdf(pdf_bytes: bytes, vals: dict, graphic_type: str = "custom") -> b
 
 for key in ["source_pdf_bytes", "source_filename", "source_folder",
             "source_po", "page_count", "result_pdf", "result_filename",
-            "dbx_ns", "og_namespace_id", "design_namespace_id", "graphic_type"]:
+            "dbx_ns", "og_namespace_id", "design_namespace_id", "graphic_type", "dropbox_saved"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -1056,6 +1035,7 @@ if st.session_state.source_pdf_bytes:
 
                         st.session_state.result_pdf      = result_bytes
                         st.session_state.result_filename = fname
+                        st.session_state.dropbox_saved   = True
 
                         pages = len(PdfReader(io.BytesIO(result_bytes)).pages)
                         drog_line = (
@@ -1078,8 +1058,8 @@ if st.session_state.source_pdf_bytes:
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-    # ── Local download backup (always available after generation) ─────────────
-    if st.session_state.result_pdf:
+    # ── Local download backup (only shown after successful Dropbox save) ───────
+    if st.session_state.get("dropbox_saved") and st.session_state.result_pdf:
         st.divider()
         col_dl, col_new = st.columns([2, 1])
         with col_dl:
@@ -1094,6 +1074,6 @@ if st.session_state.source_pdf_bytes:
             if st.button("↩  Start Another", use_container_width=True):
                 for key in ["source_pdf_bytes", "source_filename", "source_folder",
                             "source_po", "page_count", "result_pdf", "result_filename",
-                            "dbx_ns", "graphic_type"]:
+                            "dbx_ns", "graphic_type", "dropbox_saved"]:
                     st.session_state[key] = None
                 st.rerun()
