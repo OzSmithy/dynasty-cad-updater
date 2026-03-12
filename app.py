@@ -132,6 +132,7 @@ def search_dropbox_readonly(dbx, po_number: str):
     """
     SAFE READ-ONLY operation.
     Search Dropbox for a PDF whose name starts with po_number.
+    Searches full Dropbox including all subfolders.
     Downloads only the first exact match.
     Does NOT list, modify, or touch any other file.
     Returns (display_path, filename, bytes) or (None, None, None).
@@ -142,29 +143,42 @@ def search_dropbox_readonly(dbx, po_number: str):
     if not query:
         return None, None, None
 
-    results = dbx.files_search_v2(
-        query,
-        options=dbx_module.files.SearchOptions(filename_only=True, max_results=20),
-    )
+    # Try two search strategies:
+    # 1. Full P/O number (e.g. DSAU-CS0193)
+    # 2. Just the numeric part (e.g. CS0193) in case indexing strips prefix
+    search_queries = [query]
+    if "-" in query:
+        search_queries.append(query.split("-", 1)[1])
 
-    # Debug: show what Dropbox returned
-    matches_found = []
-    for match in results.matches:
-        meta = match.metadata.get_metadata()
-        if isinstance(meta, dbx_module.files.FileMetadata):
-            matches_found.append(meta.name)
+    all_matches = []
 
-    if matches_found:
-        st.info(f"Dropbox returned {len(matches_found)} match(es): {', '.join(matches_found)}")
+    for search_term in search_queries:
+        try:
+            results = dbx.files_search_v2(
+                search_term,
+                options=dbx_module.files.SearchOptions(
+                    filename_only=True,
+                    max_results=20,
+                    path="/Design/Order Graphics",
+                ),
+            )
+            for match in results.matches:
+                meta = match.metadata.get_metadata()
+                if isinstance(meta, dbx_module.files.FileMetadata):
+                    all_matches.append(meta)
+        except Exception as e:
+            st.warning(f"Search attempt failed for '{search_term}': {e}")
+
+    # Debug: show everything Dropbox returned
+    if all_matches:
+        names = [m.name for m in all_matches]
+        st.info(f"Dropbox returned {len(names)} match(es): {', '.join(names)}")
     else:
-        st.info("Dropbox returned 0 matches for this search term.")
+        st.info(f"Dropbox returned 0 matches. Check the file exists in Dropbox and the app has Full Dropbox access (not App Folder access).")
 
-    for match in results.matches:
-        meta = match.metadata.get_metadata()
-        if not isinstance(meta, dbx_module.files.FileMetadata):
-            continue
+    # Find first result whose name starts with full P/O number
+    for meta in all_matches:
         name = meta.name
-        # Must start exactly with the P/O number and be a PDF (any case extension)
         if name.upper().startswith(query) and name.upper().endswith(".PDF"):
             _, response = dbx.files_download(meta.path_lower)
             return meta.path_display, meta.name, response.content
