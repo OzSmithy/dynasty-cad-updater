@@ -220,9 +220,9 @@ st.markdown("""
 
 def get_dropbox_client():
     """
-    Connect to Dropbox using App Key + App Secret + short-lived token.
-    Automatically refreshes the token so it never expires.
-    Read/write only — no delete scope used.
+    Connect to Dropbox using App Key + App Secret + refresh token (never expires).
+    The refresh token (starts with 'ad') is passed as oauth2_refresh_token so
+    the SDK automatically exchanges it for short-lived access tokens as needed.
     """
     try:
         import dropbox
@@ -230,12 +230,23 @@ def get_dropbox_client():
         app_secret = st.secrets["DROPBOX_APP_SECRET"]
         token      = st.secrets["DROPBOX_TOKEN"]
 
-        # Use OAuth2 app credentials so token auto-refreshes
-        dbx = dropbox.Dropbox(
-            oauth2_access_token=token,
-            app_key=app_key,
-            app_secret=app_secret,
-        )
+        # Detect whether the stored token is a refresh token (starts with 'ad')
+        # or a legacy short-lived access token (starts with 'sl.')
+        if token.startswith("sl."):
+            # Legacy short-lived token — use as-is (will expire)
+            dbx = dropbox.Dropbox(
+                oauth2_access_token=token,
+                app_key=app_key,
+                app_secret=app_secret,
+            )
+        else:
+            # Refresh token — SDK will auto-exchange for access tokens forever
+            dbx = dropbox.Dropbox(
+                oauth2_refresh_token=token,
+                app_key=app_key,
+                app_secret=app_secret,
+            )
+
         # Quick check the connection works
         dbx.users_get_current_account()
         return dbx
