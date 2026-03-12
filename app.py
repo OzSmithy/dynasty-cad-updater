@@ -416,10 +416,12 @@ def make_overlay(font_path, vals, pw, ph):
             c.setFillColorRGB(0, 0, 0)
             c.drawString(TEXT_X, y0 + (ch - FONT_SIZE) / 2 + 2, text)
 
+        # Redraw only the VALUE cell border (right of divider) — never touch label column
         c.setStrokeColorRGB(0, 0, 0)
         c.setLineWidth(BORDER_LW)
-        c.rect(0.307, y0, RIGHT_X - 0.307, ch, fill=0, stroke=1)
+        c.rect(DIVIDER_X, y0, RIGHT_X - DIVIDER_X, ch, fill=0, stroke=1)
 
+    # Redraw the vertical divider line between label and value columns
     c.setStrokeColorRGB(0, 0, 0)
     c.setLineWidth(BORDER_LW)
     c.line(DIVIDER_X, PAGE_HEIGHT - 321.223, DIVIDER_X, PAGE_HEIGHT - 57.310)
