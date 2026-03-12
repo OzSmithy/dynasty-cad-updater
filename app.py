@@ -548,17 +548,19 @@ if st.session_state.source_pdf_bytes:
 
 if st.session_state.source_pdf_bytes:
     st.markdown(
-        '<div class="step-label">02 — Preview Source PDF</div>',
+        '<div class="step-label">02 — Verify Source PDF</div>',
         unsafe_allow_html=True,
     )
-
-    import base64
-    b64 = base64.b64encode(st.session_state.source_pdf_bytes).decode()
-    st.markdown(
-        f'<iframe src="data:application/pdf;base64,{b64}" '
-        f'width="100%" height="520px" '
-        f'style="border:1px solid #2a2a2a; border-radius:4px;"></iframe>',
-        unsafe_allow_html=True,
+    fname   = st.session_state.source_filename
+    fpath   = st.session_state.source_folder
+    st.markdown(f"**{fname}** — 📁 `{fpath}`")
+    st.caption("Confirm this is the correct file before updating the fields below.")
+    st.download_button(
+        label="⬇  Download source PDF to verify",
+        data=st.session_state.source_pdf_bytes,
+        file_name=st.session_state.source_filename,
+        mime="application/pdf",
+        use_container_width=False,
     )
 
 
