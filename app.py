@@ -802,8 +802,11 @@ if st.session_state.source_pdf_bytes:
                         "po_number":    po_number.strip().upper(),
                         "artist":       artist.strip().upper(),
                         "date":         date_val,
-                        "previous_ref": previous_ref.strip().upper(),
-                        "comments":     comments.strip().upper(),
+                        # Only include fields relevant to the graphic type
+                        **({"previous_ref": previous_ref.strip().upper(),
+                            "comments":     comments.strip().upper()}
+                           if (st.session_state.graphic_type or "custom") == "custom"
+                           else {}),
                     }
                     result_bytes = process_pdf(
                         st.session_state.source_pdf_bytes,
