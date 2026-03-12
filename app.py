@@ -103,11 +103,26 @@ st.markdown("""
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def get_dropbox_client():
-    """Connect to Dropbox using the secret token. Read/write only — no delete scope used."""
+    """
+    Connect to Dropbox using App Key + App Secret + short-lived token.
+    Automatically refreshes the token so it never expires.
+    Read/write only — no delete scope used.
+    """
     try:
         import dropbox
-        token = st.secrets["DROPBOX_TOKEN"]
-        return dropbox.Dropbox(token)
+        app_key    = st.secrets["DROPBOX_APP_KEY"]
+        app_secret = st.secrets["DROPBOX_APP_SECRET"]
+        token      = st.secrets["DROPBOX_TOKEN"]
+
+        # Use OAuth2 app credentials so token auto-refreshes
+        dbx = dropbox.Dropbox(
+            oauth2_access_token=token,
+            app_key=app_key,
+            app_secret=app_secret,
+        )
+        # Quick check the connection works
+        dbx.users_get_current_account()
+        return dbx
     except Exception as e:
         st.error(f"Dropbox connection failed: {e}")
         return None
