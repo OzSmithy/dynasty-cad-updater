@@ -553,15 +553,19 @@ def extract_grover_font(pdf_bytes: bytes):
 
 def extract_po_number(pdf_bytes: bytes):
     try:
-        import pdfplumber
+        import pdfplumber, re
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             chars = pdf.pages[0].chars
-            row   = sorted(
-                [c for c in chars if 75 < c["x0"] < 230 and 55 < c["top"] < 85],
+            # Tight x bounds: value column only (DIVIDER_X to RIGHT_X)
+            # Tight y bounds: P/O row only
+            row = sorted(
+                [c for c in chars if DIVIDER_X < c["x0"] < RIGHT_X and 55 < c["top"] < 85],
                 key=lambda c: c["x0"],
             )
             text = "".join(c["text"] for c in row).strip()
-            return text.split(" ")[0] if " " in text else text or None
+            # Extract only the P/O number pattern: e.g. DSAU-DM2272, DSNZ-TW0622
+            match = re.search(r'DS[A-Z]{2}-[A-Z]{2}\d+', text)
+            return match.group(0) if match else (text.split()[0] if text else None)
     except Exception:
         return None
 
