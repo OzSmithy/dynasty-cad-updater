@@ -566,6 +566,29 @@ def extract_po_number(pdf_bytes: bytes):
         return None
 
 
+def extract_artist_text(pdf_bytes: bytes, graphic_type: str = "custom") -> str:
+    """
+    Extract the existing text from the ARTIST value cell in the PDF.
+    Returns the text as a string, or empty string if nothing found.
+    """
+    try:
+        import pdfplumber
+        # pdfplumber top coords (from top of page) for the artist value cell
+        if graphic_type == "stock":
+            top0, top1 = 146.3, 168.5
+        else:
+            top0, top1 = 190.7, 212.9
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            chars = pdf.pages[0].chars
+            row = sorted(
+                [c for c in chars if DIVIDER_X < c["x0"] < RIGHT_X and top0 < c["top"] < top1],
+                key=lambda c: c["x0"],
+            )
+            return "".join(c["text"] for c in row).strip()
+    except Exception:
+        return ""
+
+
 def wrap_text(text, font_name, font_size, max_width, c):
     words = text.split(" ")
     lines, cur = [], ""
@@ -615,9 +638,21 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
                 if ly >= y0 + 2:
                     c.drawString(TEXT_X, ly, line)
         else:
-            c.setFont("Grover-Regular", FONT_SIZE)
             c.setFillColorRGB(0, 0, 0)
-            c.drawString(TEXT_X, y0 + (ch - FONT_SIZE) / 2 + 2, text)
+            if field == "artist":
+                # Auto-shrink font to keep text within cell width
+                fs = FONT_SIZE
+                try:
+                    c.setFont("Grover-Regular", fs)
+                    while fs > 6 and c.stringWidth(text, "Grover-Regular", fs) > maxw:
+                        fs -= 0.5
+                    c.setFont("Grover-Regular", fs)
+                except Exception:
+                    c.setFont("Helvetica", fs)
+                c.drawString(TEXT_X, y0 + (ch - fs) / 2 + 2, text)
+            else:
+                c.setFont("Grover-Regular", FONT_SIZE)
+                c.drawString(TEXT_X, y0 + (ch - FONT_SIZE) / 2 + 2, text)
 
         # Redraw only the VALUE cell border (right of divider) — never touch label column
         c.setStrokeColorRGB(0, 0, 0)
@@ -670,6 +705,18 @@ def process_pdf(pdf_bytes: bytes, vals: dict, graphic_type: str = "custom") -> b
             cells       = CUSTOM_CELLS
             divider_y0  = CUSTOM_DIVIDER_Y0
             divider_y1  = CUSTOM_DIVIDER_Y1
+
+        # For the ARTIST field: if existing text is present in the source PDF,
+        # append the new value to it rather than replacing it
+        new_artist = vals.get("artist", "").strip()
+        if new_artist:
+            existing_artist = extract_artist_text(pdf_bytes, graphic_type).strip().upper()
+            if existing_artist and existing_artist != new_artist:
+                vals = dict(vals)  # don't mutate caller's dict
+                vals["artist"] = f"{existing_artist} / {new_artist}"
+            else:
+                vals = dict(vals)
+                vals["artist"] = new_artist
 
         reader = PdfReader(io.BytesIO(pdf_bytes))
         writer = PdfWriter()
