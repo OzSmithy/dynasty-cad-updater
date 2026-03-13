@@ -630,9 +630,9 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
                     c.drawString(TEXT_X, ly, line)
         else:
             c.setFillColorRGB(0, 0, 0)
-            if field == "po_number":
-                # Use Helvetica for P/O Number — Grover font subset may not contain
-                # all digits/characters needed for a new P/O number
+            if field in ("po_number", "previous_ref"):
+                # Use Helvetica — Grover font subset may not contain all characters
+                # needed for new P/O numbers (e.g. digits not in the source PDF)
                 c.setFont("Helvetica", FONT_SIZE)
             else:
                 c.setFont("Grover-Regular", FONT_SIZE)
@@ -739,6 +739,7 @@ with s_col1:
         "Source P/O Number",
         placeholder="e.g. DSAU-CS0193",
         label_visibility="collapsed",
+        key="input_search_po",
     )
 with s_col2:
     customer_letter = st.text_input(
@@ -747,6 +748,7 @@ with s_col2:
         max_chars=1,
         label_visibility="collapsed",
         help="First letter of the customer name (e.g. F for Five Star Removals)",
+        key="input_customer_letter",
     )
 with s_col3:
     do_search = st.button(
@@ -1105,4 +1107,7 @@ if st.session_state.source_pdf_bytes:
                             "dbx_ns", "og_namespace_id", "design_namespace_id",
                             "graphic_type", "dropbox_saved"]:
                     st.session_state[key] = None
+                # Clear search fields
+                st.session_state["input_search_po"] = ""
+                st.session_state["input_customer_letter"] = ""
                 st.rerun()
