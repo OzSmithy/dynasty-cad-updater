@@ -604,6 +604,10 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
         y0 = cell["rl_y0"]; y1 = cell["rl_y1"]; ch = y1 - y0
         text = vals.get(field, "")
 
+        # Only overlay if there is something to write
+        if not text:
+            continue
+
         c.setFillColorRGB(1, 1, 1)
         c.rect(DIVIDER_X + lw2, y0 + lw2,
                RIGHT_X - DIVIDER_X - BORDER_LW, ch - BORDER_LW, fill=1, stroke=0)
@@ -819,7 +823,6 @@ if st.session_state.source_pdf_bytes:
     with col2:
         po_number = st.text_input(
             "P/O Number",
-            value=st.session_state.source_po or "",
             placeholder="e.g. DSNZ-PL5475",
             label_visibility="collapsed",
         )
