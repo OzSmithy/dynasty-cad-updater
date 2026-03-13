@@ -454,21 +454,22 @@ def upload_new_file_to_dropbox(dbx, folder_path: str, filename: str,
 
 def propose_new_filename(source_filename: str, new_po: str) -> str:
     """
-    Replace the P/O prefix only.
-    DSAU-CS0193_Five Star Removals-Stock Polo.PDF → DSAU-CS0194_Five Star Removals-Stock Polo.PDF
-    Everything after the first underscore is preserved exactly, including
-    spaces, capitalisation and the original file extension.
+    Replace the P/O prefix in the source filename with the new P/O number.
+    Handles both underscore and space separated filenames:
+      DSAU-CS0193_Five Star Removals.PDF  → DSAU-CS0194_Five Star Removals.PDF
+      DSAU-CM3691C BEAUDESERT JRL.pdf     → DSAU-CM3905A BEAUDESERT JRL.pdf
     """
     import re
     new_po = new_po.strip().upper()
-    parts  = source_filename.split("_", 1)
-    if len(parts) == 2:
-        return f"{new_po}_{parts[1]}"
-    # Fallback: try replacing a leading PO-like pattern (e.g. DSAU-DM2272)
-    cleaned = re.sub(r'^[A-Z]{2,4}[-\s][A-Z]{2}\d+\s*', '', source_filename).lstrip('_- ')
-    if cleaned:
-        return f"{new_po}_{cleaned}"
-    return f"{new_po}_{source_filename}"
+    new_po = re.sub(r'\s*-\s*', '-', new_po)  # remove spaces around dash: DSAU - CM3905A → DSAU-CM3905A
+    # Match the full PO prefix: e.g. DSAU-CM3691C or DSNZ-TW0622 then space or underscore
+    match = re.match(r'^([A-Z]{2,4}-[A-Z]{2,3}\d+[A-Z]*)([\s_])(.*)', source_filename, re.IGNORECASE)
+    if match:
+        separator = match.group(2)  # preserve original separator (_ or space)
+        remainder = match.group(3)  # everything after the PO prefix
+        return f"{new_po}{separator}{remainder}"
+    # Fallback: just prepend new PO to the whole filename
+    return f"{new_po} {source_filename}"
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1005,7 +1006,7 @@ if st.session_state.source_pdf_bytes:
                 try:
                     # ── Step A: generate PDF in memory ────────────────────────
                     vals = {
-                        "po_number":    po_number.strip().upper(),
+                        "po_number":    re.sub(r'\s*-\s*', '-', po_number.strip().upper()),
                         "artist":       artist.strip().upper(),
                         "date":         date_val,
                         # Custom: include previous_ref + comments in cells
