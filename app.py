@@ -557,7 +557,7 @@ def extract_po_number(pdf_bytes: bytes):
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             chars = pdf.pages[0].chars
             row   = sorted(
-                [c for c in chars if 75 < c["x0"] < 210 and 57 < c["top"] < 83],
+                [c for c in chars if 75 < c["x0"] < 230 and 55 < c["top"] < 85],
                 key=lambda c: c["x0"],
             )
             text = "".join(c["text"] for c in row).strip()
@@ -581,7 +581,7 @@ def extract_artist_text(pdf_bytes: bytes, graphic_type: str = "custom") -> str:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             chars = pdf.pages[0].chars
             row = sorted(
-                [c for c in chars if DIVIDER_X < c["x0"] < RIGHT_X and top0 < c["top"] < top1],
+                [c for c in chars if DIVIDER_X < c["x0"] < RIGHT_X + 20 and top0 - 2 < c["top"] < top1 + 2],
                 key=lambda c: c["x0"],
             )
             return "".join(c["text"] for c in row).strip()
@@ -888,6 +888,10 @@ if st.session_state.source_pdf_bytes:
 
     is_stock = (st.session_state.graphic_type == "stock")
 
+    # Defaults — overwritten below by the appropriate input widgets
+    comments     = ""
+    previous_ref = ""
+
     if not is_stock:
         col1, col2 = st.columns([1, 2])
         with col1:
@@ -935,9 +939,6 @@ if st.session_state.source_pdf_bytes:
                 label_visibility="collapsed",
             )
         previous_ref = ""
-    else:
-        previous_ref = ""
-        comments     = ""
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
