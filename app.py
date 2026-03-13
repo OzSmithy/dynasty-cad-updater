@@ -586,12 +586,14 @@ def extract_artist_text(pdf_bytes: bytes, graphic_type: str = "custom") -> str:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             chars = pdf.pages[0].chars
             row = sorted(
-                [c for c in chars if DIVIDER_X < c["x0"] < RIGHT_X + 20 and top0 - 2 < c["top"] < top1 + 2],
+                [c for c in chars
+                 if DIVIDER_X < c["x0"] < RIGHT_X + 30
+                 and top0 - 3 < c["top"] < top1 + 3
+                 and c["text"] != " "],
                 key=lambda c: c["x0"],
             )
-            # Strip phantom spaces from font kerning, then collapse multiple spaces
-            raw = "".join(c["text"] for c in row).strip()
-            return " ".join(raw.split())
+            # Join non-space chars — Grover font kerning produces phantom spaces
+            return "".join(c["text"] for c in row).strip()
     except Exception:
         return ""
 
@@ -804,7 +806,7 @@ if do_search and search_po.strip() and customer_letter.strip():
             st.session_state.source_pdf_bytes = pdf_bytes
             st.session_state.source_filename  = filename
             st.session_state.source_folder    = path  # already the folder path
-            st.session_state.source_po        = extract_po_number(pdf_bytes)
+            st.session_state.source_po        = search_po.strip().upper()
             st.session_state.graphic_type     = detect_graphic_type(pdf_bytes)
             st.session_state.page_count       = len(PdfReader(io.BytesIO(pdf_bytes)).pages)
             st.session_state.result_pdf       = None
