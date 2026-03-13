@@ -818,7 +818,9 @@ if st.session_state.source_pdf_bytes:
         st.markdown("**P/O Number**")
     with col2:
         po_number = st.text_input(
-            "P/O Number", placeholder="e.g. DSNZ-PL5475",
+            "P/O Number",
+            value=st.session_state.source_po or "",
+            placeholder="e.g. DSNZ-PL5475",
             label_visibility="collapsed",
         )
 
