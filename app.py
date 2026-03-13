@@ -624,8 +624,13 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
                 if ly >= y0 + 2:
                     c.drawString(TEXT_X, ly, line)
         else:
-            c.setFont("Grover-Regular", FONT_SIZE)
             c.setFillColorRGB(0, 0, 0)
+            if field == "po_number":
+                # Use Helvetica for P/O Number — Grover font subset may not contain
+                # all digits/characters needed for a new P/O number
+                c.setFont("Helvetica-Bold", FONT_SIZE)
+            else:
+                c.setFont("Grover-Regular", FONT_SIZE)
             c.drawString(TEXT_X, y0 + (ch - FONT_SIZE) / 2 + 2, text)
 
         # Redraw only the VALUE cell border (right of divider) — never touch label column
