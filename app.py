@@ -481,7 +481,7 @@ LINE_HEIGHT = 13.0
 
 # Custom Order Graphic — 5 editable fields in lower table section
 CUSTOM_CELLS = {
-    "po_number":    {"rl_y0": PAGE_HEIGHT - 79.497,  "rl_y1": PAGE_HEIGHT - 57.310},
+    "po_number":    {"rl_y0": PAGE_HEIGHT - 84.0,    "rl_y1": PAGE_HEIGHT - 57.310},
     "artist":       {"rl_y0": PAGE_HEIGHT - 212.871, "rl_y1": PAGE_HEIGHT - 190.684},
     "date":         {"rl_y0": PAGE_HEIGHT - 235.058, "rl_y1": PAGE_HEIGHT - 212.871},
     "previous_ref": {"rl_y0": PAGE_HEIGHT - 257.245, "rl_y1": PAGE_HEIGHT - 235.058},
@@ -491,7 +491,7 @@ CUSTOM_CELLS = {
 # Stock Order Graphic — 3 editable fields (P/O NUMBER, ARTIST, DATE only)
 # Exact coords from PDF rect analysis
 STOCK_CELLS = {
-    "po_number": {"rl_y0": 515.779, "rl_y1": 537.966},
+    "po_number": {"rl_y0": 511.0,   "rl_y1": 537.966},
     "artist":    {"rl_y0": 426.780, "rl_y1": 448.967},
     "date":      {"rl_y0": 404.593, "rl_y1": 426.780},
 }
@@ -605,8 +605,9 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
         text = vals.get(field, "")
 
         c.setFillColorRGB(1, 1, 1)
-        c.rect(DIVIDER_X + lw2, y0 + lw2,
-               RIGHT_X - DIVIDER_X - BORDER_LW, ch - BORDER_LW, fill=1, stroke=0)
+        # Use a generous rect to ensure all original text is fully covered
+        c.rect(DIVIDER_X + BORDER_LW, y0 + BORDER_LW,
+               RIGHT_X - DIVIDER_X - BORDER_LW * 2, ch - BORDER_LW * 2, fill=1, stroke=0)
 
         if field == "comments":
             # Use Helvetica for comments — user-typed text may contain characters
