@@ -628,7 +628,7 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
             if field == "po_number":
                 # Use Helvetica for P/O Number — Grover font subset may not contain
                 # all digits/characters needed for a new P/O number
-                c.setFont("Helvetica-Bold", FONT_SIZE)
+                c.setFont("Helvetica", FONT_SIZE)
             else:
                 c.setFont("Grover-Regular", FONT_SIZE)
             c.drawString(TEXT_X, y0 + (ch - FONT_SIZE) / 2 + 2, text)
@@ -1087,7 +1087,7 @@ if st.session_state.source_pdf_bytes:
         col_dl, col_new = st.columns([2, 1])
         with col_dl:
             st.download_button(
-                label="⬇  Also download locally as backup",
+                label="⬇  DOWNLOAD",
                 data=st.session_state.result_pdf,
                 file_name=st.session_state.result_filename or "output.pdf",
                 mime="application/pdf",
