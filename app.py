@@ -559,10 +559,11 @@ def extract_po_number(pdf_bytes: bytes):
             # Tight x bounds: value column only (DIVIDER_X to RIGHT_X)
             # Tight y bounds: P/O row only
             row = sorted(
-                [c for c in chars if DIVIDER_X < c["x0"] < RIGHT_X and 55 < c["top"] < 85],
+                [c for c in chars if DIVIDER_X < c["x0"] < RIGHT_X + 20 and 55 < c["top"] < 85],
                 key=lambda c: c["x0"],
             )
-            text = "".join(c["text"] for c in row).strip()
+            # Join chars, strip spaces (font kerning can produce phantom spaces)
+            text = "".join(c["text"] for c in row if c["text"] != " ").strip()
             # Extract only the P/O number pattern: e.g. DSAU-DM2272, DSNZ-TW0622
             match = re.search(r'DS[A-Z]{2}-[A-Z]{2}\d+', text)
             return match.group(0) if match else (text.split()[0] if text else None)
@@ -588,7 +589,9 @@ def extract_artist_text(pdf_bytes: bytes, graphic_type: str = "custom") -> str:
                 [c for c in chars if DIVIDER_X < c["x0"] < RIGHT_X + 20 and top0 - 2 < c["top"] < top1 + 2],
                 key=lambda c: c["x0"],
             )
-            return "".join(c["text"] for c in row).strip()
+            # Strip phantom spaces from font kerning, then collapse multiple spaces
+            raw = "".join(c["text"] for c in row).strip()
+            return " ".join(raw.split())
     except Exception:
         return ""
 
