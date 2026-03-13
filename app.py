@@ -571,33 +571,6 @@ def extract_po_number(pdf_bytes: bytes):
         return None
 
 
-def extract_artist_text(pdf_bytes: bytes, graphic_type: str = "custom") -> str:
-    """
-    Extract the existing text from the ARTIST value cell in the PDF.
-    Returns the text as a string, or empty string if nothing found.
-    """
-    try:
-        import pdfplumber
-        # pdfplumber top coords (from top of page) for the artist value cell
-        if graphic_type == "stock":
-            top0, top1 = 146.3, 168.5
-        else:
-            top0, top1 = 190.7, 212.9
-        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            chars = pdf.pages[0].chars
-            row = sorted(
-                [c for c in chars
-                 if DIVIDER_X < c["x0"] < RIGHT_X + 30
-                 and top0 - 3 < c["top"] < top1 + 3
-                 and c["text"] != " "],
-                key=lambda c: c["x0"],
-            )
-            # Join non-space chars — Grover font kerning produces phantom spaces
-            return "".join(c["text"] for c in row).strip()
-    except Exception:
-        return ""
-
-
 def wrap_text(text, font_name, font_size, max_width, c):
     words = text.split(" ")
     lines, cur = [], ""
@@ -714,18 +687,6 @@ def process_pdf(pdf_bytes: bytes, vals: dict, graphic_type: str = "custom") -> b
             cells       = CUSTOM_CELLS
             divider_y0  = CUSTOM_DIVIDER_Y0
             divider_y1  = CUSTOM_DIVIDER_Y1
-
-        # For the ARTIST field: if existing text is present in the source PDF,
-        # append the new value to it rather than replacing it
-        new_artist = vals.get("artist", "").strip()
-        if new_artist:
-            existing_artist = extract_artist_text(pdf_bytes, graphic_type).strip().upper()
-            if existing_artist and existing_artist != new_artist:
-                vals = dict(vals)  # don't mutate caller's dict
-                vals["artist"] = f"{existing_artist} / {new_artist}"
-            else:
-                vals = dict(vals)
-                vals["artist"] = new_artist
 
         reader = PdfReader(io.BytesIO(pdf_bytes))
         writer = PdfWriter()
