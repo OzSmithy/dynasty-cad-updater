@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import tempfile
 from datetime import date
 
@@ -459,7 +460,6 @@ def propose_new_filename(source_filename: str, new_po: str) -> str:
       DSAU-CS0193_Five Star Removals.PDF  → DSAU-CS0194_Five Star Removals.PDF
       DSAU-CM3691C BEAUDESERT JRL.pdf     → DSAU-CM3905A BEAUDESERT JRL.pdf
     """
-    import re
     new_po = new_po.strip().upper()
     new_po = re.sub(r'\s*-\s*', '-', new_po)  # remove spaces around dash: DSAU - CM3905A → DSAU-CM3905A
     # Match the full PO prefix: e.g. DSAU-CM3691C or DSNZ-TW0622 then space or underscore
