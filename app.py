@@ -459,12 +459,16 @@ def propose_new_filename(source_filename: str, new_po: str) -> str:
     Everything after the first underscore is preserved exactly, including
     spaces, capitalisation and the original file extension.
     """
+    import re
     new_po = new_po.strip().upper()
     parts  = source_filename.split("_", 1)
     if len(parts) == 2:
         return f"{new_po}_{parts[1]}"
-    # Fallback: no underscore found — keep original name but swap prefix
-    return f"{new_po}_ORDER_GRAPHIC.pdf"
+    # Fallback: try replacing a leading PO-like pattern (e.g. DSAU-DM2272)
+    cleaned = re.sub(r'^[A-Z]{2,4}[-\s][A-Z]{2}\d+\s*', '', source_filename).lstrip('_- ')
+    if cleaned:
+        return f"{new_po}_{cleaned}"
+    return f"{new_po}_{source_filename}"
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1097,6 +1101,7 @@ if st.session_state.source_pdf_bytes:
             if st.button("↩  Start Another", use_container_width=True):
                 for key in ["source_pdf_bytes", "source_filename", "source_folder",
                             "source_po", "page_count", "result_pdf", "result_filename",
-                            "dbx_ns", "graphic_type", "dropbox_saved"]:
+                            "dbx_ns", "og_namespace_id", "design_namespace_id",
+                            "graphic_type", "dropbox_saved"]:
                     st.session_state[key] = None
                 st.rerun()
