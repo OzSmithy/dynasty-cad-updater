@@ -220,13 +220,20 @@ st.markdown("""
 
 def get_dropbox_client():
     """
-    Connect to Dropbox using a long-lived access token generated from the
-    ogv2 app console (Access token expiration set to No expiration).
+    Connect to Dropbox using App Key + App Secret + refresh token (never expires).
+    The refresh token (starts with 'ad') is passed as oauth2_refresh_token so
+    the SDK automatically exchanges it for short-lived access tokens as needed.
     """
     try:
         import dropbox
-        token = st.secrets["DROPBOX_TOKEN"]
-        dbx = dropbox.Dropbox(oauth2_access_token=token)
+        app_key    = st.secrets["DROPBOX_APP_KEY"]
+        app_secret = st.secrets["DROPBOX_APP_SECRET"]
+        token      = st.secrets["DROPBOX_TOKEN"]
+        dbx = dropbox.Dropbox(
+            oauth2_refresh_token=token,
+            app_key=app_key,
+            app_secret=app_secret,
+        )
         dbx.users_get_current_account()
         return dbx
     except Exception as e:
