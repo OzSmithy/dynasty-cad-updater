@@ -695,8 +695,8 @@ def process_pdf(pdf_bytes: bytes, vals: dict, graphic_type: str = "custom") -> b
             w  = float(orig.mediabox.width)
             h  = float(orig.mediabox.height)
             op = PdfReader(make_overlay(tmp.name, vals, w, h, cells, divider_y0, divider_y1)).pages[0]
-            op.merge_page(orig, over=False)
-            writer.add_page(op)
+            orig.merge_page(op, over=True)
+            writer.add_page(orig)
 
         out = io.BytesIO()
         writer.write(out)
