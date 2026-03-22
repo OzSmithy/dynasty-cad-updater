@@ -1107,7 +1107,8 @@ if st.session_state.source_pdf_bytes:
                             "dbx_ns", "og_namespace_id", "design_namespace_id",
                             "graphic_type", "dropbox_saved"]:
                     st.session_state[key] = None
-                # Clear search fields
-                st.session_state["input_search_po"] = ""
-                st.session_state["input_customer_letter"] = ""
+                # Clear search fields by deleting their keys
+                for k in ["input_search_po", "input_customer_letter"]:
+                    if k in st.session_state:
+                        del st.session_state[k]
                 st.rerun()
