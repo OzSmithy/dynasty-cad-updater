@@ -630,7 +630,7 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
                     c.drawString(TEXT_X, ly, line)
         else:
             c.setFillColorRGB(0, 0, 0)
-            if field in ("po_number", "previous_ref"):
+            if field in ("po_number", "previous_ref", "date", "artist"):
                 # Use Helvetica — Grover font subset may not contain all characters
                 # needed for new P/O numbers (e.g. digits not in the source PDF)
                 c.setFont("Helvetica", FONT_SIZE)
