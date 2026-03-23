@@ -350,7 +350,8 @@ def search_dropbox_readonly(dbx, po_number: str, customer_letter: str):
 
         for folder in customer_folders:
             try:
-                sub = dbx_ns.files_list_folder(folder.path_lower)
+                # Use recursive=True to find files in any subfolder depth
+                sub = dbx_ns.files_list_folder(folder.path_lower, recursive=True)
                 while True:
                     for entry in sub.entries:
                         if isinstance(entry, dbx_module.files.FileMetadata):
