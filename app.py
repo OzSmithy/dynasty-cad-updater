@@ -574,6 +574,44 @@ def extract_po_number(pdf_bytes: bytes):
         return None
 
 
+def extract_stock_comment(pdf_bytes: bytes) -> str:
+    """
+    Extract existing free-float comment text from a Stock Order Graphic.
+    The comment sits below the DATE row (rl_y ~ 390, pdfplumber top ~ 205).
+    Uses only Helvetica chars (our written comments) to avoid Grover encoding issues.
+    """
+    try:
+        import pdfplumber
+        PAGE_H = 595.28
+        # Comment zone: below DATE bottom (rl_y=404.593 → top=190.687) down ~80pts
+        top_min = PAGE_H - 404.593        # 190.687
+        top_max = PAGE_H - 404.593 + 80   # 270.687
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            chars = pdf.pages[0].chars
+            zone = sorted(
+                [c for c in chars
+                 if top_min < c["top"] < top_max
+                 and DIVIDER_X < c["x0"] < RIGHT_X + 20],
+                key=lambda c: (round(c["top"]), c["x0"]),
+            )
+            if not zone:
+                return ""
+            # Group into lines by y proximity
+            lines, cur_line, last_top = [], [], None
+            for c in zone:
+                if last_top is None or abs(c["top"] - last_top) < 3:
+                    cur_line.append(c["text"])
+                else:
+                    lines.append("".join(cur_line).strip())
+                    cur_line = [c["text"]]
+                last_top = c["top"]
+            if cur_line:
+                lines.append("".join(cur_line).strip())
+            return " ".join(l for l in lines if l).strip()
+    except Exception:
+        return ""
+
+
 def wrap_text(text, font_name, font_size, max_width, c):
     words = text.split(" ")
     lines, cur = [], ""
@@ -771,6 +809,11 @@ if do_search and search_po.strip() and customer_letter.strip():
             st.session_state.source_folder    = path  # already the folder path
             st.session_state.source_po        = search_po.strip().upper()
             st.session_state.graphic_type     = detect_graphic_type(pdf_bytes)
+            # Pre-extract existing stock comment for pre-population in UI
+            if st.session_state.graphic_type == "stock":
+                st.session_state["existing_stock_comment"] = extract_stock_comment(pdf_bytes)
+            else:
+                st.session_state["existing_stock_comment"] = ""
             st.session_state.page_count       = len(PdfReader(io.BytesIO(pdf_bytes)).pages)
             st.session_state.result_pdf       = None
             st.session_state.result_filename  = None
@@ -905,7 +948,10 @@ if st.session_state.source_pdf_bytes:
                 unsafe_allow_html=True,
             )
         with col2:
-            default_comment = f"*REPEAT OF {st.session_state.source_po}" if st.session_state.source_po else ""
+            existing = st.session_state.get("existing_stock_comment", "")
+            default_comment = existing if existing else (
+                f"*REPEAT OF {st.session_state.source_po}" if st.session_state.source_po else ""
+            )
             comments = st.text_input(
                 "Stock Comments",
                 value=default_comment,
@@ -1103,7 +1149,7 @@ if st.session_state.source_pdf_bytes:
                 for key in ["source_pdf_bytes", "source_filename", "source_folder",
                             "source_po", "page_count", "result_pdf", "result_filename",
                             "dbx_ns", "og_namespace_id", "design_namespace_id",
-                            "graphic_type", "dropbox_saved"]:
+                            "graphic_type", "dropbox_saved", "existing_stock_comment"]:
                     st.session_state[key] = None
                 # Clear search fields by deleting their keys
                 for k in ["input_search_po", "input_customer_letter"]:
