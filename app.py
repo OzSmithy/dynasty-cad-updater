@@ -316,73 +316,70 @@ def get_order_graphics_ns(dbx):
 def search_dropbox_readonly(dbx, po_number: str, customer_letter: str):
     """
     SAFE READ-ONLY operation.
-    Scans only the single letter subfolder within Order Graphics.
-    Structure: Order Graphics / [LETTER] / [CUSTOMER] / file.PDF
-    Only 2 levels deep — fast even with thousands of files.
+    Uses Dropbox files_search_v2 API — fast indexed search across all subfolders.
+    Filters results to files starting with the P/O number under the correct letter folder.
     Returns (display_path, filename, bytes) or (None, None, None).
     """
     import dropbox as dbx_module
+    from dropbox import files as dbx_files
 
     query  = po_number.strip().upper()
-    letter = customer_letter.strip().upper()[:1]  # single letter only
+    letter = customer_letter.strip().upper()[:1]
 
     if not query or not letter:
         return None, None, None
 
-    # Get namespace-scoped client
+    # Get namespace-scoped client (Order Graphics shared folder)
     dbx_ns, is_ns = get_order_graphics_ns(dbx)
     if not dbx_ns:
         st.error("Could not connect to Order Graphics folder.")
         return None, None, None
 
+    status = st.empty()
+    status.info(f"Searching for `{query}` in Order Graphics/{letter}/…")
+
     found_meta = None
 
     try:
-        # List customer folders under the letter folder
-        letter_result = dbx_ns.files_list_folder(f"/{letter}")
-        customer_folders = [
-            e for e in letter_result.entries
-            if isinstance(e, dbx_module.files.FolderMetadata)
-        ]
+        # Use Dropbox search API — fast, indexed, no folder walking needed
+        options = dbx_files.SearchOptions(
+            path=f"/{letter}",          # restrict to the letter subfolder
+            filename_only=True,          # search by filename only
+            file_status=dbx_files.FileStatus.active,
+        )
+        results = dbx_ns.files_search_v2(query=query, options=options)
 
-        status = st.empty()
-        status.info(f"Found {len(customer_folders)} customer folder(s) under `{letter}/` — scanning…")
-
-        for folder in customer_folders:
-            try:
-                # Use recursive=True to find files in any subfolder depth
-                sub = dbx_ns.files_list_folder(folder.path_lower, recursive=True)
-                while True:
-                    for entry in sub.entries:
-                        if isinstance(entry, dbx_module.files.FileMetadata):
-                            if (entry.name.upper().startswith(query)
-                                    and entry.name.upper().endswith(".PDF")):
-                                found_meta = entry
-                                break
-                    if found_meta or not sub.has_more:
-                        break
-                    sub = dbx_ns.files_list_folder_continue(sub.cursor)
-            except Exception:
-                continue
-            if found_meta:
+        for match in results.matches:
+            meta = match.metadata.get_metadata()
+            if (isinstance(meta, dbx_files.FileMetadata)
+                    and meta.name.upper().startswith(query)
+                    and meta.name.upper().endswith(".PDF")):
+                found_meta = meta
                 break
 
-        status.empty()
+        # Paginate if needed
+        while not found_meta and results.has_more:
+            results = dbx_ns.files_search_continue_v2(results.cursor)
+            for match in results.matches:
+                meta = match.metadata.get_metadata()
+                if (isinstance(meta, dbx_files.FileMetadata)
+                        and meta.name.upper().startswith(query)
+                        and meta.name.upper().endswith(".PDF")):
+                    found_meta = meta
+                    break
 
     except dbx_module.exceptions.ApiError as e:
-        st.error(
-            f"Could not open letter folder `/{letter}` in Order Graphics. "
-            f"Make sure the customer letter is correct. Error: {e}"
-        )
+        status.empty()
+        st.error(f"Search failed: {e}")
         return None, None, None
+
+    status.empty()
 
     if found_meta:
         st.info(f"✓ Found: `{found_meta.path_display}`")
         _, response = dbx_ns.files_download(found_meta.path_lower)
-        # Store the namespace-scoped client so upload goes to same folder
         st.session_state.dbx_ns = dbx_ns
-        # Use path_lower of the file's parent folder (e.g. /f/five star removals)
-        folder_path = found_meta.path_lower.rsplit("/", 1)[0]  # e.g. /f/five star removals
+        folder_path = found_meta.path_lower.rsplit("/", 1)[0]
         return folder_path, found_meta.name, response.content
     else:
         st.warning(
