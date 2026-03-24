@@ -686,10 +686,11 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
 
     # Stock-only: free-floating comment below DATE row, centred, red, Helvetica
     stock_comment = vals.get("stock_comment", "").strip()
-    # Always wipe the comment zone — clears any existing comment from source PDF
-    c.setFillColorRGB(1, 1, 1)
-    c.rect(DIVIDER_X + lw2, divider_y0 - 80,
-           RIGHT_X - DIVIDER_X - BORDER_LW, 80, fill=1, stroke=0)
+    # Wipe comment zone ONLY for stock graphics — custom graphics have content below DATE
+    if vals.get("graphic_type") == "stock":
+        c.setFillColorRGB(1, 1, 1)
+        c.rect(DIVIDER_X + lw2, divider_y0 - 80,
+               RIGHT_X - DIVIDER_X - BORDER_LW, 80, fill=1, stroke=0)
     if stock_comment:
         centre_x  = (DIVIDER_X + RIGHT_X) / 2
         text_y    = divider_y0 - 14
@@ -1052,6 +1053,7 @@ if st.session_state.source_pdf_bytes:
                         "po_number":    re.sub(r'\s*-\s*', '-', po_number.strip().upper()),
                         "artist":       artist.strip().upper(),
                         "date":         date_val,
+                        "graphic_type": st.session_state.graphic_type or "custom",
                         # Custom: include previous_ref + comments in cells
                         # Stock: comments passed separately for free-float rendering
                         **({"previous_ref": previous_ref.strip().upper(),
