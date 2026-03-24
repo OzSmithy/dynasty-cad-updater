@@ -512,25 +512,24 @@ CELLS = CUSTOM_CELLS
 def detect_graphic_type(pdf_bytes: bytes) -> str:
     """
     Detect whether a PDF is a Custom or Stock Order Graphic.
-    Stock Order Graphics have 6 rows ending at ~top=190 (DATE is last field).
-    Custom Order Graphics have additional rows below (ARTIST, DATE, PREV REF, COMMENTS).
+    Custom Order Graphics have PREVIOUS REF and COMMENTS rows.
+    Stock Order Graphics only have P/O NUMBER, CUSTOMER, STYLE CODE,
+    DESCRIPTION, ARTIST and DATE.
+    Uses text detection — reliable regardless of how borders are drawn.
     Returns "stock" or "custom".
     """
     try:
         import pdfplumber
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             page = pdf.pages[0]
-            rects = page.rects
-            # Custom has table rows between top=190 and top=330 (ARTIST/DATE/PREV REF/COMMENTS)
-            # Stock table ends at top~190 (DATE is last row)
-            # Ignore footer rects (top > 400)
-            deep_rects = [
-                r for r in rects
-                if 195 < r['top'] < 400
-                and r['x0'] < 220
-                and r['x1'] > 100
-            ]
-            return "custom" if deep_rects else "stock"
+            words = page.extract_words()
+            # "PREVIOUS" only appears in Custom Order Graphics (PREVIOUS REF row)
+            # Check label column only (x0 < 100) to avoid false matches elsewhere
+            has_previous = any(
+                w['text'].upper() == 'PREVIOUS' and w['x0'] < 100
+                for w in words
+            )
+            return "custom" if has_previous else "stock"
     except Exception:
         return "custom"  # safe default
 
