@@ -686,9 +686,13 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
 
     # Stock-only: free-floating comment below DATE row, centred, red, Helvetica
     stock_comment = vals.get("stock_comment", "").strip()
+    # Always wipe the comment zone — clears any existing comment from source PDF
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(DIVIDER_X + lw2, divider_y0 - 80,
+           RIGHT_X - DIVIDER_X - BORDER_LW, 80, fill=1, stroke=0)
     if stock_comment:
-        centre_x  = (DIVIDER_X + RIGHT_X) / 2          # 141.52
-        text_y    = divider_y0 - 14                     # just below DATE cell bottom
+        centre_x  = (DIVIDER_X + RIGHT_X) / 2
+        text_y    = divider_y0 - 14
         max_w     = RIGHT_X - DIVIDER_X - 4
         c.setFont("Helvetica", FONT_SIZE)
         c.setFillColorRGB(0.85, 0, 0)
