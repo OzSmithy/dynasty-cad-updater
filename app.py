@@ -880,14 +880,7 @@ if st.session_state.source_pdf_bytes:
             label_visibility="collapsed",
         )
 
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.markdown("**Artist**")
-    with col2:
-        artist = st.text_input(
-            "Artist", placeholder="e.g. SANA",
-            label_visibility="collapsed",
-        )
+    artist = "DROG"
 
     col1, col2 = st.columns([1, 2])
     with col1:
