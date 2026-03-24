@@ -688,9 +688,10 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
     stock_comment = vals.get("stock_comment", "").strip()
     # Wipe comment zone ONLY for stock graphics — custom graphics have content below DATE
     if vals.get("graphic_type") == "stock":
+        # Wipe comment zone below DATE border — start just inside the border, go downward
         c.setFillColorRGB(1, 1, 1)
-        c.rect(DIVIDER_X + lw2, divider_y0 - 80,
-               RIGHT_X - DIVIDER_X - BORDER_LW, 80, fill=1, stroke=0)
+        c.rect(DIVIDER_X + lw2, divider_y0 - BORDER_LW - 70,
+               RIGHT_X - DIVIDER_X - BORDER_LW, 70, fill=1, stroke=0)
     if stock_comment:
         centre_x  = (DIVIDER_X + RIGHT_X) / 2
         text_y    = divider_y0 - 14
