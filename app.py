@@ -887,16 +887,7 @@ if st.session_state.source_pdf_bytes:
 
     artist = "DROG"
 
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.markdown("**Date**")
-    with col2:
-        picked_date = st.date_input(
-            "Date", value=date.today(),
-            format="DD/MM/YYYY",
-            label_visibility="collapsed",
-        )
-        date_val = picked_date.strftime("%d/%m/%Y")
+    date_val = date.today().strftime("%d/%m/%Y")
 
     st.divider()
 
