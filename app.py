@@ -474,13 +474,14 @@ def propose_new_filename(source_filename: str, new_po: str) -> str:
 #  PDF PROCESSING
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-PAGE_HEIGHT = 595.28
-BORDER_LW   = 0.921
-DIVIDER_X   = 76.92
-RIGHT_X     = 206.121
-TEXT_X      = 83.0
-FONT_SIZE   = 10.0
-LINE_HEIGHT = 13.0
+PAGE_HEIGHT          = 595.28
+BORDER_LW            = 0.921
+DIVIDER_X            = 76.92
+RIGHT_X              = 206.121
+STOCK_COMMENT_RIGHT_X = 230.0   # Stock PDFs have a wider comment zone (cyan text layer extends to ~225)
+TEXT_X               = 83.0
+FONT_SIZE            = 10.0
+LINE_HEIGHT          = 13.0
 
 # Custom Order Graphic — 5 editable fields in lower table section
 CUSTOM_CELLS = {
@@ -688,13 +689,14 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
     # Wipe comment zone ONLY for stock graphics — custom graphics have content below DATE
     if vals.get("graphic_type") == "stock":
         # Wipe comment zone below DATE border — start just inside the border, go downward
+        # Use STOCK_COMMENT_RIGHT_X (wider than RIGHT_X) to cover the cyan text layer in stock PDFs
         c.setFillColorRGB(1, 1, 1)
         c.rect(DIVIDER_X + lw2, divider_y0 - BORDER_LW - 70,
-               RIGHT_X - DIVIDER_X - BORDER_LW, 70, fill=1, stroke=0)
+               STOCK_COMMENT_RIGHT_X - DIVIDER_X - BORDER_LW, 70, fill=1, stroke=0)
     if stock_comment:
-        centre_x  = (DIVIDER_X + RIGHT_X) / 2
+        centre_x  = (DIVIDER_X + STOCK_COMMENT_RIGHT_X) / 2
         text_y    = divider_y0 - 14
-        max_w     = RIGHT_X - DIVIDER_X - 4
+        max_w     = STOCK_COMMENT_RIGHT_X - DIVIDER_X - 4
         c.setFont("Helvetica", FONT_SIZE)
         c.setFillColorRGB(0.85, 0, 0)
         lines = wrap_text(stock_comment, "Helvetica", FONT_SIZE, max_w, c)
@@ -937,10 +939,7 @@ if st.session_state.source_pdf_bytes:
                 unsafe_allow_html=True,
             )
         with col2:
-            existing = st.session_state.get("existing_stock_comment", "")
-            default_comment = existing if existing else (
-                f"*REPEAT OF {st.session_state.source_po}" if st.session_state.source_po else ""
-            )
+            default_comment = f"*REPEAT OF {st.session_state.source_po}" if st.session_state.source_po else ""
             comments = st.text_input(
                 "Stock Comments",
                 value=default_comment,
