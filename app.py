@@ -833,7 +833,7 @@ if st.session_state.source_pdf_bytes:
     st.markdown(
         f'<div class="file-found">'
         f'✓ &nbsp;<strong>{st.session_state.source_filename}</strong>'
-        f'&nbsp;·&nbsp; {pages} page{"s" if pages > 1 else ""}'
+        f'&nbsp;·&nbsp; {pages} page{"s" if (pages or 0) > 1 else ""}'
         f'&nbsp;·&nbsp; P/O: <strong>{st.session_state.source_po or "unknown"}</strong>'
         f'&nbsp;·&nbsp; {gtype_label}'
         f'</div>',
