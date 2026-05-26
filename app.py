@@ -479,6 +479,11 @@ BORDER_LW            = 0.921
 DIVIDER_X            = 76.92
 RIGHT_X              = 206.121
 STOCK_COMMENT_RIGHT_X = 230.0   # Stock PDFs have a wider comment zone (cyan text layer extends to ~225)
+# Detected from pdfplumber inspection of stock PDFs: each row is a stroked
+# rect with x0 ≈ 0.307; that's the table's left outer edge. The wipe below
+# the DATE row now extends to x=0, so we redraw a left segment here on top
+# to keep the visual border continuous if any template has one.
+TABLE_LEFT_X         = 0.307
 TEXT_X               = 83.0
 FONT_SIZE            = 10.0
 LINE_HEIGHT          = 13.0
@@ -688,11 +693,20 @@ def make_overlay(font_path, vals, pw, ph, cells=None, divider_y0=None, divider_y
     stock_comment = vals.get("stock_comment", "").strip()
     # Wipe comment zone ONLY for stock graphics — custom graphics have content below DATE
     if vals.get("graphic_type") == "stock":
-        # Wipe comment zone below DATE border — start just inside the border, go downward
-        # Use STOCK_COMMENT_RIGHT_X (wider than RIGHT_X) to cover the cyan text layer in stock PDFs
+        # Wipe from the page's left edge (x=0) so any residual text in the
+        # label-column area (e.g. a previous '*REPEAT / XXXX' run-over) is
+        # fully covered. Width extends past RIGHT_X to STOCK_COMMENT_RIGHT_X
+        # to also cover the cyan text layer present in stock PDFs.
         c.setFillColorRGB(1, 1, 1)
-        c.rect(DIVIDER_X + lw2, divider_y0 - BORDER_LW - 70,
-               STOCK_COMMENT_RIGHT_X - DIVIDER_X - BORDER_LW, 70, fill=1, stroke=0)
+        c.rect(0, divider_y0 - BORDER_LW - 70,
+               STOCK_COMMENT_RIGHT_X, 70, fill=1, stroke=0)
+        # Restore the table's left outer border across the wiped band so it
+        # remains continuous if a template draws one here. Meets the bottom
+        # of the DATE-row border at the top without overshooting.
+        c.setStrokeColorRGB(0, 0, 0)
+        c.setLineWidth(BORDER_LW)
+        c.line(TABLE_LEFT_X, divider_y0 - BORDER_LW - 70,
+               TABLE_LEFT_X, divider_y0)
     if stock_comment:
         centre_x  = (DIVIDER_X + STOCK_COMMENT_RIGHT_X) / 2
         text_y    = divider_y0 - 14
