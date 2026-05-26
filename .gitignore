@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets / local config
+.env
+.env.local
+.streamlit/secrets.toml
+
+# Test / scratch artifacts
+_test_*
+
+# OS noise
+.DS_Store
+Thumbs.db
